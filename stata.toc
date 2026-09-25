@@ -1,0 +1,4 @@
+v 3
+d Abdelkrim Araar, Universite Laval / PEP
+d
+p equaids AIDS and QUAIDS demand systems for survey data: aggregate elasticities with analytic standard errors (robust, cluster, svy)

@@ -1,0 +1,27 @@
+v 3
+d equaids: AIDS and QUAIDS demand systems for survey data - aggregate elasticities with analytic standard errors (robust, cluster, svy)
+d
+d Author: Abdelkrim Araar, Universite Laval / PEP
+d Support: aabd@ecn.ulaval.ca
+d Version : 0.1.0 (development)
+d License : GPL-3.0-or-later
+d
+d Almost ideal demand system (Deaton and Muellbauer 1980) and its quadratic
+d extension (Banks, Blundell and Lewbel 1997), demographics by Ray's scaling,
+d estimated by iterated FGNLS (Gauss-Newton, analytic Jacobian, in Mata).
+d Aggregate elasticities (default), at the means and household mean; analytic
+d standard errors from influence functions, robust, by cluster or by survey
+d design (svyset). Diagnostics before estimation (equaidsdiag), estat
+d diagnostics, Engel curves after estimation (estat engel), dialog box.
+d
+d Requires: Stata 14.2 or later
+d
+d Distribution-Date: 20260925
+d
+f src/equaids.ado
+f src/equaids.sthlp
+f src/equaids.dlg
+f src/equaids_estat.ado
+f src/_equaids_tabstars.ado
+f src/equaidsdiag.ado
+f src/equaidsdiag.sthlp

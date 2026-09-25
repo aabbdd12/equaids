@@ -1,0 +1,315 @@
+/*
+    equaids.dlg  —  dialog for equaids (AIDS and QUAIDS demand systems)
+    db equaids
+
+    One dialog for the two commands (as easi's): Action = estimate the model
+    (equaids) or diagnose the specification (equaidsdiag).  Under the
+    diagnostic the controls that belong to the estimator alone are greyed
+    out, rather than filled in and silently dropped.
+
+    Tabs, as in Stata's estimation dialogs (and duvm's):
+      Model        action, shares, prices, expenditure, model, demographics,
+                   alpha_0, short names
+      if/in        standard include (ifin)
+      Weights      standard include (weights_fpai: fweight pweight aweight iweight)
+      SE/Robust    robust (default), cluster, survey design, conventional
+      Reporting    summary of the elasticities, level, decimals, tables, file
+      Estimation   tolerance, iterations, iteration log
+      Diagnostic   sensitivity of the estimates to alpha_0 (equaidsdiag)
+*/
+VERSION 14.0
+INCLUDE _std_large
+DEFINE _dlgwd 700
+DEFINE _dlght 360
+INCLUDE header
+HELP hlp1, view("help equaids")
+RESET res1
+
+SCRIPT PREINIT
+BEGIN
+  create BOOLEAN has_diag
+END
+SCRIPT POSTINIT
+BEGIN
+  program set_mode
+  program anot_state
+  program vce_state
+END
+
+DIALOG main, label("equaids — AIDS and QUAIDS demand systems") tabtitle("Model")
+BEGIN
+  GROUPBOX gb_act      10   10  640  45, label("What to run")
+  TEXT     tx_act      20   28  100   ., label("Action:")
+  COMBOBOX cb_act     125   28  515   ., dropdownlist contents(actlist) values(actvals) ///
+           onselchangelist(act_change) label("Action")
+
+  GROUPBOX gb_vars     10   62  640 175, label("Variables")
+  TEXT     tx_shares   20   80  620   ., label("Budget shares (one per good; they must sum to one):")
+  VARLIST  vl_shares   20  100  620   ., label("Budget shares") numeric
+  TEXT     tx_prices   20  128  150   ., label("Prices:")
+  RADIO    rb_plev    170  128  110   ., first label("levels") option(NONE)
+  RADIO    rb_plog    285  128  200   ., last label("logs (lnprices)") option(NONE)
+  VARLIST  vl_prices   20  148  620   ., label("Prices, in the order of the shares") numeric
+  TEXT     tx_exp      20  176  150   ., label("Total expenditure:")
+  RADIO    rb_xlev    170  176  110   ., first label("level") option(NONE)
+  RADIO    rb_xlog    285  176  200   ., last label("log (lnexpenditure)") option(NONE)
+  VARNAME  vn_exp      20  196  300   ., label("Total expenditure") numeric
+  TEXT     tx_snames  340  196  110   ., label("Short names:")
+  EDIT     ed_snames  450  196  190   ., label("Short names of the goods") option(snames)
+
+  GROUPBOX gb_mod      10  244  640  95, label("Model")
+  RADIO    rb_quaids   20  262  150   ., first label("QUAIDS") option(NONE)
+  RADIO    rb_aids    170  262  150   ., last label("AIDS (noquadratic)") option(noquadratic)
+  TEXT     tx_demo     20  286  300   ., label("Demographic variables (Ray scaling):")
+  VARLIST  vl_demo    320  286  320   ., label("Demographics") numeric option(demographics)
+  CHECKBOX ck_anot     20  312  300   ., label("Impose alpha_0 (default: min ln x - 0.1):") ///
+           onclickon(program anot_state) onclickoff(program anot_state)
+  EDIT     ed_anot    320  312   80   ., label("alpha_0") numonly option(anot)
+END
+
+LIST actlist
+BEGIN
+  Estimate the model (equaids)
+  Diagnose the specification, without estimating it (equaidsdiag)
+END
+LIST actvals
+BEGIN
+  est
+  diag
+END
+LIST act_change
+BEGIN
+  script mode_est
+  script mode_diag
+END
+
+SCRIPT mode_est
+BEGIN
+  has_diag.setfalse
+  program set_mode
+END
+SCRIPT mode_diag
+BEGIN
+  has_diag.settrue
+  program set_mode
+END
+
+PROGRAM anot_state
+BEGIN
+  if main.ck_anot {
+    call main.ed_anot.enable
+  }
+  if !main.ck_anot {
+    call main.ed_anot.disable
+  }
+END
+
+INCLUDE ifin
+INCLUDE weights_fpai
+
+DIALOG se, tabtitle("SE/Robust")
+BEGIN
+  GROUPBOX gb_v        10   10  640 170, label("Variance estimator (coefficients and aggregate elasticities)")
+  RADIO    rb_robust   20   30  600   ., first label("Robust (default)") onclickon(program vce_state)
+  RADIO    rb_cluster  20   55  250   ., label("Clustered by:") onclickon(program vce_state)
+  VARNAME  vn_clust   270   55  200   ., label("Cluster variable")
+  RADIO    rb_svy      20   80  600   ., label("Survey design declared by svyset (strata, PSUs, fpc, pweight)") ///
+           onclickon(program vce_state)
+  RADIO    rb_conv     20  105  600   ., last label("Conventional (coefficients; homoskedastic errors, no weights)") ///
+           onclickon(program vce_state)
+  TEXT     tx_svy      40  130  600   ., label("With the survey design, leave the Weights tab empty: the weight comes from svyset.")
+  TEXT     tx_svy2     40  150  600   ., label("Strata with a single PSU follow svyset's singleunit() option.")
+END
+
+PROGRAM vce_state
+BEGIN
+  if se.rb_cluster & !has_diag {
+    call se.vn_clust.enable
+  }
+  if !se.rb_cluster | has_diag {
+    call se.vn_clust.disable
+  }
+END
+
+DIALOG rpt, tabtitle("Reporting")
+BEGIN
+  GROUPBOX gb_el       10   10  640  50, label("Summary of the household elasticities")
+  COMBOBOX cb_el       20   28  620   ., dropdownlist contents(ellist) values(elvals) ///
+           default(aggregate) option(elasticities) label("Elasticities")
+
+  GROUPBOX gb_disp     10   68  640 185, label("Display")
+  DEFINE _x 20
+  DEFINE _cx 150
+  DEFINE _y 88
+  INCLUDE _sp_level
+  TEXT     tx_dec     280   88  120   ., label("Decimals:")
+  SPINNER  sp_dec     405   88   60   ., label("Decimals") min(0) max(8) default(4) option(dec)
+  CHECKBOX ck_comp     20  115  610   ., label("Add the compensated (Hicksian) price elasticities") option(compensated)
+  CHECKBOX ck_checks   20  137  610   ., label("Show the aggregation identities (Engel, Cournot, homogeneity, symmetry)") option(checks)
+  CHECKBOX ck_stars    20  159  610   ., label("Significance stars on the estimates") option(stars)
+  CHECKBOX ck_dislas   20  181  300   ., label("Show the last good") default(1)
+  CHECKBOX ck_dreg    330  181  300   ., label("Display the coefficients")
+  CHECKBOX ck_noese    20  203  300   ., label("Skip the standard errors of the elasticities") option(noelastse)
+  CHECKBOX ck_notab   330  203  300   ., label("Do not display the tables") option(notable)
+
+  GROUPBOX gb_save     10  260  640  70, label("Save the tables")
+  TEXT     tx_save     20  280  620   ., label("File (the extension gives the format: .docx .tex .xlsx .csv .md):")
+  FILE     fi_save     20  300  620   ., label("Browse...") save option(saveres) ///
+           filter("Word (*.docx)|*.docx|LaTeX (*.tex)|*.tex|Excel (*.xlsx)|*.xlsx|CSV (*.csv)|*.csv|Markdown (*.md)|*.md")
+END
+
+LIST ellist
+BEGIN
+  Aggregate: elasticities of total demand (default; with standard errors)
+  At the means of ln p, ln x and z
+  Mean of the household elasticities (sampling weights)
+END
+LIST elvals
+BEGIN
+  aggregate
+  means
+  household
+END
+
+DIALOG conv, tabtitle("Estimation")
+BEGIN
+  GROUPBOX gb_c        10   10  640 110, label("Iterated FGNLS (Gauss-Newton, analytic Jacobian)")
+  TEXT     tx_tol      20   30  450   ., label("Tolerance on the Newton decrement g'A^-1 g (default 1e-6):")
+  EDIT     ed_tol     480   30  100   ., label("Tolerance") numonly default(1e-6) option(tolerance)
+  TEXT     tx_it       20   58  450   ., label("Maximum number of iterations:")
+  SPINNER  sp_it      480   58  100   ., label("Iterations") min(1) max(10000) default(300) option(iterate)
+  CHECKBOX ck_nolog    20   86  600   ., label("Suppress the iteration log") option(nolog) default(1)
+END
+
+DIALOG dg, tabtitle("Diagnostic")
+BEGIN
+  GROUPBOX gb_d        10   10  640 120, label("equaidsdiag: sensitivity to alpha_0 (the only part that estimates)")
+  CHECKBOX ck_sens     20   30  600   ., label("Estimate the model at several values of alpha_0 (sensitivity)") option(sensitivity)
+  TEXT     tx_a0l      20   58  600   ., label("Values of alpha_0 (default: min ln x - 0.1, and 1, 2 and 4 below):")
+  EDIT     ed_a0l      20   78  620   ., label("alpha_0 values") option(a0list)
+  TEXT     tx_dnote    20  104  620   ., label("Sections D0-D5 (data, prices, alpha_0, demographics, conditioning, small goods) always run.")
+END
+
+// controls of the estimator alone are greyed out under the diagnostic, and
+// the Diagnostic tab under the estimation
+PROGRAM set_mode
+BEGIN
+  if has_diag {
+    call se.rb_robust.disable
+    call se.rb_cluster.disable
+    call se.rb_svy.disable
+    call se.rb_conv.disable
+    call rpt.cb_el.disable
+    call rpt.sp_level.disable
+    call rpt.sp_dec.disable
+    call rpt.ck_comp.disable
+    call rpt.ck_checks.disable
+    call rpt.ck_stars.disable
+    call rpt.ck_dislas.disable
+    call rpt.ck_dreg.disable
+    call rpt.ck_noese.disable
+    call rpt.ck_notab.disable
+    call rpt.fi_save.disable
+    call main.ed_snames.disable
+    call conv.ed_tol.disable
+    call conv.sp_it.disable
+    call conv.ck_nolog.disable
+    call dg.ck_sens.enable
+    call dg.ed_a0l.enable
+  }
+  if !has_diag {
+    call se.rb_robust.enable
+    call se.rb_cluster.enable
+    call se.rb_svy.enable
+    call se.rb_conv.enable
+    call rpt.cb_el.enable
+    call rpt.sp_level.enable
+    call rpt.sp_dec.enable
+    call rpt.ck_comp.enable
+    call rpt.ck_checks.enable
+    call rpt.ck_stars.enable
+    call rpt.ck_dislas.enable
+    call rpt.ck_dreg.enable
+    call rpt.ck_noese.enable
+    call rpt.ck_notab.enable
+    call rpt.fi_save.enable
+    call main.ed_snames.enable
+    call conv.ed_tol.enable
+    call conv.sp_it.enable
+    call conv.ck_nolog.enable
+    call dg.ck_sens.disable
+    call dg.ed_a0l.disable
+  }
+  call program vce_state
+END
+
+PROGRAM command
+BEGIN
+  if has_diag {
+    put "equaidsdiag "
+  }
+  if !has_diag {
+    put "equaids "
+  }
+  require main.vl_shares
+  varlist main.vl_shares
+  put " " /program ifin_output
+  put " " /program weights_output
+  beginoptions
+    require main.vl_prices
+    if main.rb_plev {
+      put " prices(" main.vl_prices ")"
+    }
+    if main.rb_plog {
+      put " lnprices(" main.vl_prices ")"
+    }
+    require main.vn_exp
+    if main.rb_xlev {
+      put " expenditure(" main.vn_exp ")"
+    }
+    if main.rb_xlog {
+      put " lnexpenditure(" main.vn_exp ")"
+    }
+    option main.rb_aids
+    optionarg main.vl_demo
+    if main.ck_anot {
+      require main.ed_anot
+      optionarg main.ed_anot
+    }
+    if has_diag {
+      option dg.ck_sens
+      optionarg dg.ed_a0l
+    }
+    if !has_diag {
+      optionarg main.ed_snames
+      if se.rb_cluster {
+        require se.vn_clust
+        put " vce(cluster " se.vn_clust ")"
+      }
+      if se.rb_svy {
+        put " vce(svy)"
+      }
+      if se.rb_conv {
+        put " vce(conventional)"
+      }
+      optionarg /hidedefault rpt.cb_el
+      optionarg /hidedefault rpt.sp_level
+      optionarg /hidedefault rpt.sp_dec
+      option rpt.ck_comp
+      option rpt.ck_checks
+      option rpt.ck_stars
+      if !rpt.ck_dislas {
+        put " dislas(0)"
+      }
+      if rpt.ck_dreg {
+        put " dregres(1)"
+      }
+      option rpt.ck_noese
+      option rpt.ck_notab
+      optionarg /quoted rpt.fi_save
+      optionarg /hidedefault conv.ed_tol
+      optionarg /hidedefault conv.sp_it
+      option conv.ck_nolog
+    }
+  endoptions
+END
