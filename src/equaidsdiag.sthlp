@@ -201,7 +201,12 @@ estimate.
 {phang2}{cmd:. equaidsdiag} {it:shares}{cmd:, prices(}{it:prices}{cmd:) expenditure(}{it:x}{cmd:) demographics(}{it:z1 z2}{cmd:) stability}{p_end}
 
 
-{title:Reference}
+{title:References}
+
+{phang}
+Araar, A. 2026. Estimating AIDS and QUAIDS demand systems with survey data:
+the equaids Stata module. Technical note, Zenodo.
+{browse "https://doi.org/10.5281/zenodo.22959991":doi:10.5281/zenodo.22959991}.
 
 {phang}
 Belsley, D. A., E. Kuh, and R. E. Welsch. 1980. {it:Regression Diagnostics:

@@ -393,6 +393,11 @@ demographics along ln x; {opt observed} is therefore refused at the means.
 {title:References}
 
 {phang}
+Araar, A. 2026. Estimating AIDS and QUAIDS demand systems with survey data:
+the equaids Stata module. Technical note, Zenodo.
+{browse "https://doi.org/10.5281/zenodo.22959991":doi:10.5281/zenodo.22959991}.
+
+{phang}
 Banks, J., R. Blundell, and A. Lewbel. 1997. Quadratic Engel curves and
 consumer demand. {it:Review of Economics and Statistics} 79: 527-539.
 

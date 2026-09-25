@@ -24,6 +24,12 @@ help equaids
 help equaidsdiag
 ```
 
+## Citation
+
+Araar, A. 2026. *Estimating AIDS and QUAIDS demand systems with survey data:
+the equaids Stata module*. Technical note, Zenodo.
+https://doi.org/10.5281/zenodo.22959991
+
 ## Author
 
 Abdelkrim Araar, Universite Laval and Partnership for Economic Policy (PEP).
