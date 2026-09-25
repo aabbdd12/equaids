@@ -1477,7 +1477,7 @@ real scalar _eq_step(real rowvector th, real matrix S, real matrix W,
                      pointer(real matrix) rowvector G, real scalar nd,
                      real scalar tt, real scalar hb)
 {
-    real matrix    A, Un
+    real matrix    A, Un, H
     real colvector g, step
     real rowvector thn
     real scalar    P, M, i, j, t, Q, Qn, ok, r
@@ -1486,12 +1486,15 @@ real scalar _eq_step(real rowvector th, real matrix S, real matrix W,
     hb = 0          // 1 if a trial step crossed the boundary m0(z) > 0
 
     P = cols(th) ; M = cols(W)
+    // A = sum_ij S_ij G_i'WG_j, g = sum_ij S_ij G_i'W u_j, grouped (S is
+    // symmetric): H_i = sum_j S_ij G_j, A = sum_i G_i'W H_i, g = sum_i H_i'W u_i
+    // -- M-1 cross products of N x P instead of (M-1)^2
     A = J(P, P, 0) ; g = J(P, 1, 0)
     for (i = 1; i < M; i++) {
-        for (j = 1; j < M; j++) {
-            A = A + S[i, j] :* cross(*G[i], om, *G[j])
-            g = g + S[i, j] :* cross(*G[i], om, U[., j])
-        }
+        H = J(rows(W), P, 0)
+        for (j = 1; j < M; j++) H = H + S[i, j] :* *G[j]
+        A = A + cross(*G[i], om, H)
+        g = g + cross(H, om, U[., i])
     }
     step = cholsolve(A, g)
     if (hasmissing(step)) step = invsym(A) * g
@@ -1625,7 +1628,7 @@ void _eq_fit(string scalar wv, string scalar lpv, string scalar lxv,
              real scalar doe, string scalar desv, real scalar vmode,
              string scalar single)
 {
-    real matrix    W, LP, Z, D, U, S, Sig, Sigo, A, V, Vf, As, X, DS
+    real matrix    W, LP, Z, D, U, S, Sig, Sigo, A, V, Vf, As, X, DS, H
     real colvector LX, om, ndh, ngh, dA, m0, ell
     real rowvector th, c0, bfull, e, al, be, la, rh
     real matrix    Ga, et, F
@@ -1757,9 +1760,12 @@ void _eq_fit(string scalar wv, string scalar lpv, string scalar lxv,
     // conventional variance at the final Sigma
     S = invsym(Sig)
     (void) _eq_model(th, W, LP, LX, Z, a0, qd, D, U, G, 1)
+    // grouped as in _eq_step
     A = J(P, P, 0)
     for (i = 1; i < M; i++) {
-        for (j = 1; j < M; j++) A = A + S[i, j] :* cross(*G[i], om, *G[j])
+        H = J(N, P, 0)
+        for (j = 1; j < M; j++) H = H + S[i, j] :* *G[j]
+        A = A + cross(*G[i], om, H)
     }
     Vf = invsym(A)
     V  = D * Vf * D'
