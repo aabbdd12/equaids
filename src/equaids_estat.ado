@@ -1,4 +1,4 @@
-*! equaids_estat 0.1.0  2026-09-25  Abdelkrim Araar
+*! equaids_estat 1.0.0  2026-09-25  Abdelkrim Araar
 *! estat after equaids:
 *!   estat diagnostics   the diagnostics of the estimate and of the data
 *!   estat engel         the Engel curves (layout of easi and duvm)

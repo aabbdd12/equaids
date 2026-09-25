@@ -3,7 +3,7 @@ d equaids: AIDS and QUAIDS demand systems for survey data - aggregate elasticiti
 d
 d Author: Abdelkrim Araar, Universite Laval / PEP
 d Support: aabd@ecn.ulaval.ca
-d Version : 0.1.0 (development)
+d Version : 1.0.0
 d License : GPL-3.0-or-later
 d
 d Almost ideal demand system (Deaton and Muellbauer 1980) and its quadratic

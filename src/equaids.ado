@@ -1,4 +1,4 @@
-*! equaids 0.1.0  2026-09-25  Abdelkrim Araar  (development version)
+*! equaids 1.0.0  2026-09-25  Abdelkrim Araar
 *! AIDS and QUAIDS demand systems: iterated FGNLS by Gauss-Newton with an
 *! analytic Jacobian, in Mata.
 *!

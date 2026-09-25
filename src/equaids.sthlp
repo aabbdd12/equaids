@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.1.0  25sep2026}{...}
+{* *! version 1.0.0  25sep2026}{...}
 {vieweralsosee "equaidsdiag" "help equaidsdiag"}{...}
 {vieweralsosee "[R] demandsys" "help demandsys"}{...}
 {viewerjumpto "Syntax" "equaids##syntax"}{...}

@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 0.1.0  25sep2026}{...}
+{* *! version 1.0.0  25sep2026}{...}
 {* the threshold of D4 is provisional: to be set after the audit on three data sets (audit/diag/)}{...}
 {vieweralsosee "equaids" "help equaids"}{...}
 {viewerjumpto "Syntax" "equaidsdiag##syntax"}{...}

@@ -1,8 +1,9 @@
-*! equaidsdiag 0.1.0  2026-09-25  Abdelkrim Araar  (development version, step 4)
+*! equaidsdiag 1.0.0  2026-09-25  Abdelkrim Araar
 *! Diagnostics of an AIDS/QUAIDS specification before estimating it: data,
 *! prices, expenditure and alpha_0, demographics, conditioning of the design
 *! at the starting point, small goods; optionally the sensitivity of the
-*! estimates to alpha_0 (the only part that estimates).
+*! estimates to alpha_0 (D6) and their stability to each demographic (D7),
+*! the only parts that estimate.
 *!
 *! Principle (as easidiag): everything in D0-D5 is computed from the data and
 *! from the regressors at the starting point -- alpha at the mean shares, the

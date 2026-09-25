@@ -14,7 +14,7 @@ strata, primary sampling units, finite-population correction).
 - `equaidsdiag`: diagnostics of a specification before estimating it
 - `estat diagnostics`, `estat engel`: after estimation
 
-Version 0.1.0 (development). Requires Stata 14.2 or later.
+Version 1.0.0. Requires Stata 14.2 or later.
 
 ## Installation
 
