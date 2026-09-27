@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0  25sep2026}{...}
+{* *! version 1.1.0  27sep2026}{...}
 {vieweralsosee "equaidsdiag" "help equaidsdiag"}{...}
 {vieweralsosee "[R] demandsys" "help demandsys"}{...}
 {viewerjumpto "Syntax" "equaids##syntax"}{...}
@@ -13,8 +13,10 @@
 {title:Title}
 
 {p2colset 5 16 18 2}{...}
-{p2col:{cmd:equaids} {hline 2}}AIDS and QUAIDS demand systems, with aggregate elasticities and survey-design inference{p_end}
+{p2col:{cmd:equaids} {hline 2}}AIDS and QUAIDS demand systems, with elasticities of the market, the household or the individual, and survey-design inference{p_end}
 {p2colreset}{...}
+
+{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.1.0{txt} (27/09/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
 
 
 {marker syntax}{...}
@@ -40,15 +42,23 @@ must sum to one; the prices are given in the same order.
 {synopt:{opt demo:graphics(varlist)}}demographic variables, entering by Ray's scaling{p_end}
 {synopt:{opt anot(#)}}impose the constant alpha_0 of the price index; default: the smallest log expenditure minus 0.1{p_end}
 
+{syntab:Missing prices and non-buyers}
+{synopt:{opt pimp:ute(varlist)}}fill a missing price by the mean log price of the same group, the groups tried in order{p_end}
+{synopt:{opt sel:ection}}correct for the households that do not buy (Shonkwiler and Yen 1999){p_end}
+{synopt:{opt selg:oods(namelist)}}the shares corrected; default: those with zeros, the last good excepted; implies {opt selection}{p_end}
+{synopt:{cmd:selvars(}[{it:good}{cmd::}] {it:varlist} [{cmd:;} ...]{cmd:)}}variables of the probits only, for every corrected good or for one good; implies {opt selection}{p_end}
+
 {syntab:Variance}
 {synopt:{opt vce(robust)}}robust; the default{p_end}
-{synopt:{opt vce(cluster} {it:clustvar}{cmd:)}}clustered{p_end}
+{synopt:{cmd:vce(cluster} {it:clustvar}{cmd:)}}clustered{p_end}
 {synopt:{opt vce(svy)}}survey design declared by {helpb svyset}: strata, PSUs, finite-population correction, pweight{p_end}
 {synopt:{opt vce(conventional)}}conventional (coefficients){p_end}
+{synopt:{cmd:vce(bootstrap} [{cmd:,} {it:{help equaids##bootopts:boot_opts}}]{cmd:)}}bootstrap of the whole procedure{p_end}
 {synopt:{opt l:evel(#)}}confidence level; default {cmd:level(95)}{p_end}
 
 {syntab:Elasticities and reporting}
-{synopt:{opt elas:ticities(type)}}summary of the household elasticities: {cmd:aggregate} (the default), {cmd:means} or {cmd:household}{p_end}
+{synopt:{opt elas:ticities(type)}}{cmd:market} (the default), {cmd:households}, {cmd:individuals} or {cmd:hhmean}{p_end}
+{synopt:{opt hhs:ize(varname)}}size of the household; required by {cmd:elasticities(individuals)}{p_end}
 {synopt:{opt compens:ated}}add the compensated (Hicksian) price elasticities{p_end}
 {synopt:{opt checks}}show the aggregation identities{p_end}
 {synopt:{opt det:ail}}{opt compensated} and {opt checks}{p_end}
@@ -68,6 +78,17 @@ must sum to one; the prices are given in the same order.
 {synopt:{opt nolog}}suppress the iteration log{p_end}
 {synoptline}
 {p 4 6 2}* one of each pair is required.{p_end}
+
+{marker bootopts}{...}
+{synoptset 24}{...}
+{synopthdr:boot_opts}
+{synoptline}
+{synopt:{opt r:eps(#)}}number of replications; default 200{p_end}
+{synopt:{opt seed(#)}}random-number seed{p_end}
+{synopt:{opt str:ata(varname)}}resample within strata{p_end}
+{synopt:{opt psu(varname)}}resampling unit; default the household{p_end}
+{synopt:{opt svy}}take PSU, strata and weight from {helpb svyset}{p_end}
+{synoptline}
 
 {marker weight}{...}
 {p 4 6 2}{opt aweight}s, {opt fweight}s, {opt pweight}s and {opt iweight}s are
@@ -110,12 +131,20 @@ steps with an analytic Jacobian, and reproduces the estimates of these
 commands under the same model and alpha_0.
 
 {pstd}
-The default summary of the elasticities is the {it:aggregate} elasticity: the
-elasticity of the total demand of the population, the household elasticities
-weighted by each household's expenditure on the good. Its standard errors are
-analytic and include the sampling of the households as well as the estimation
-of the coefficients. All the variances (robust, clustered, survey design) are
+The default elasticities are those of the {it:market}: the elasticities of the
+total demand of the population, the household elasticities weighted by each
+household's expenditure on the good (the aggregate elasticities). Those of the
+household, at the means, of the individual, and the mean of the household
+elasticities are available too. Their standard errors include the sampling of
+the households as well as the estimation of the coefficients. All the variances (robust, clustered, survey design) are
 built from the same influence functions. See {help equaids##remarks:Remarks}.
+
+{pstd}
+Survey data record zero shares for the households that do not buy a good, and
+no price for them. {opt pimpute()} fills the missing prices from the other
+households of the same group, and {opt selection} corrects the system for the
+non-buyers by the two-step method of Shonkwiler and Yen (1999); see
+{help equaids##selection:the selection of the buyers}.
 
 {pstd}
 {helpb equaidsdiag} diagnoses a specification before estimating it.
@@ -151,11 +180,88 @@ linear function of l and the quadratic terms weakly identified; see
 {helpb equaidsdiag}. Use {opt anot()} to reproduce results that impose a value
 (Poi's example uses 10).
 
+{dlgtab:Missing prices and non-buyers}
+
+{phang}
+{opt pimpute(varlist)} fills the missing prices. Without it, a household with
+a missing price leaves the sample; with unit values as prices, that drops the
+households that do not buy some good, and a correction for the non-buyers is
+then impossible. Each missing log price is replaced by the weighted mean of
+the log prices of the households of the sample in the same group of the first
+variable (for example the PSU); when nobody in the group has a price, the
+group of the next variable is used (for example urban/rural), and so on.
+Households still without a price leave the sample, and the means are computed
+again until the sample no longer changes: the donors are the households of the
+final sample. The weight is that of the estimation (times {opt hhsize()} under
+{cmd:elasticities(individuals)}). A note reports, good by good, the prices
+filled at each level. The filled prices are then treated as data: the standard
+errors do not include the imputation. {cmd:estat engel} fills them in the same
+way on {cmd:e(sample)}.
+
+{phang}
+{opt selection} corrects for the households that do not buy (Shonkwiler and
+Yen 1999). For every corrected good {it:i}, a probit of purchase (w_i > 0) is
+estimated first, with the weights of the estimation, on
+
+{p 12 12 2}
+s_i = (1, ln(p_1/x), ..., ln(p_M/x), z, the variables of {opt selvars()} for {it:i}),
+
+{pmore}
+and the system is then estimated on all the households, buyers or not, with
+the expected shares
+
+{p 12 12 2}
+E[w_i] = Phi(s_i'a_i) f_i + delta_i phi(s_i'a_i),
+
+{pmore}
+f_i the share of the model (AIDS or QUAIDS) and delta_i a new parameter, the
+covariance of the error of the share with that of the probit; delta_i = 0 is
+no selection. The last good closes the system, E[w_M] = 1 - sum of the
+others: it must be bought by every household (place last a good that everybody
+buys, such as the rest of the budget), and it is not corrected. The probit is
+written in prices relative to expenditure, so that it is homogeneous of degree
+zero, as are the expected shares: the Engel and Cournot aggregation and
+homogeneity hold exactly for the market elasticities; symmetry holds for the
+shares f of the model, not for the expected shares. The elasticities are those
+of the expected demand of all the households, buyers and non-buyers. The
+standard errors include the estimation of the probits (their influence
+functions are stacked into those of the system). {opt selection} is refused
+with {cmd:vce(conventional)}.
+
+{phang}
+{opt selgoods(namelist)} restricts the correction to the goods listed (names
+of the shares). By default, every good with zero shares in the sample is
+corrected, the last good excepted; a good listed that every household buys is
+left uncorrected, with a note.
+
+{phang}
+{cmd:selvars(}[{it:good}{cmd::}] {it:varlist} [{cmd:;} ...]{cmd:)} gives the
+variables of the probits only: they move the purchase of the good but not the
+share of those who buy (exclusion restrictions). Segments are separated by
+{cmd:;}. A segment without a good name goes to the probit of every corrected
+good; {it:good}{cmd::} {it:varlist} to the probit of that good only; the two
+add up. With the goods {cmd:wcorn}, {cmd:wwheat} and {cmd:wrice} corrected:
+
+{p2colset 12 48 50 2}{...}
+{p2col:{cmd:selvars(dist)}}{cmd:dist} in the three probits{p_end}
+{p2col:{cmd:selvars(wrice: perc_ocupa)}}{cmd:perc_ocupa} in the probit of {cmd:wrice} only{p_end}
+{p2col:{cmd:selvars(dist ; wrice: perc_ocupa)}}{cmd:dist} in the three, {cmd:perc_ocupa} for {cmd:wrice}{p_end}
+{p2col:{cmd:selvars(wcorn: rururb ; wrice: perc_ocupa)}}{cmd:rururb} for {cmd:wcorn}, {cmd:perc_ocupa} for {cmd:wrice}, nothing more for {cmd:wwheat}{p_end}
+{p2colreset}{...}
+
+{pmore}
+Rules, checked before estimating: a good named must be one of the shares, not
+the last one, and corrected (in {opt selgoods()} when it is given); one good
+per segment; a variable of {opt selvars()} must not be in the model (a share,
+price, expenditure or demographic). Households with a missing value of these
+variables leave the sample, with a note. Without {opt selvars()}, the
+correction is identified by the nonlinearity of the probit only.
+
 {dlgtab:Variance}
 
 {phang}
 {opt vce(robust)}, the default, sums the squares of the influence functions
-of the households (factor N/(N-1)). {opt vce(cluster} {it:clustvar}{cmd:)}
+of the households (factor N/(N-1)). {cmd:vce(cluster} {it:clustvar}{cmd:)}
 sums them by cluster (factor G/(G-1)).
 
 {phang}
@@ -174,20 +280,66 @@ the aggregate elasticities covered 92.5% to 94.4% of the time; with 10 to 32
 PSUs per stratum, 93.1% to 94.8%.
 
 {phang}
+{cmd:vce(bootstrap} [{cmd:,} {it:boot_opts}]{cmd:)} estimates the full sample,
+then resamples the households (or the PSUs of {opt psu()}, within the strata of
+{opt strata()}; {opt svy} takes both and the weight from {helpb svyset}) with
+replacement, and on each replication runs the whole procedure again: the
+prices filled by {opt pimpute()}, the probits of {opt selection}, alpha_0 by
+its rule, the system. The households keep their weights. The variances of the
+coefficients, of delta, of the four types of elasticities, and those used by
+{cmd:estat engel}, are the variances of the replications. A replication that
+does not converge is dropped and counted ({cmd:e(N_reps_ok)}); the replications
+iterate up to 1,000 times unless {opt iterate()} is given. Use it when
+{cmd:equaids} warns that the linearized standard errors are unreliable (see
+{help equaids##selection:Remarks}).
+
+{phang}
 {opt vce(conventional)} gives the conventional variance of the coefficients
 (no weights, homoskedastic errors); it cannot be combined with pweights.
 
 {dlgtab:Elasticities and reporting}
 
 {phang}
-{opt elasticities(aggregate)}, the default, reports the aggregate
-elasticities, with standard errors. {opt elasticities(means)} evaluates the
-household elasticities at the weighted means of ln p, ln x and z, as Poi
-(2012); {opt elasticities(household)} averages the household elasticities
-with the sampling weights, as {helpb demandsys} (which does not weight the
-average). These two have no standard errors. The household elasticities
-divide by the predicted shares: {cmd:equaids} warns when some are near zero
-or outside [0,1].
+{opt elasticities(market|households|individuals|hhmean)} sets which
+elasticities are reported; the names are those of {cmd:duvm}.
+
+{phang2}
+{cmd:market}, the default, gives the elasticities of total demand, the
+aggregate elasticities: each household counts in proportion to its expenditure
+on the good (see {help equaids##remarks:Remarks}).
+
+{phang2}
+{cmd:households} gives those of the household, at the weighted means of ln p,
+ln x and z, as Poi (2012).
+
+{phang2}
+{cmd:individuals} gives those of the individual: each household counts for its
+weight times its size, {opt hhsize()}, in the whole estimation, and the
+elasticities are evaluated at the means so weighted. With household data the
+behaviour is that of the household in all the types; {cmd:individuals} weights
+each household by its size: it gives the elasticities of the household of the
+average person, not those of a person within the household. It is an
+estimation, not a display: after it, only {cmd:individuals} can be displayed,
+and it cannot be displayed after the other estimation. The weight used is
+stored in {cmd:e(wexp)}, so that {cmd:estat} uses the same.
+
+{phang2}
+{cmd:hhmean} averages the household elasticities with the sampling weights,
+as {helpb demandsys} (which does not weight the average). The household
+elasticities divide by the predicted shares: {cmd:equaids} warns when some are
+near zero or outside [0,1].
+
+{pmore}
+All four have standard errors. {cmd:market}, {cmd:households} and
+{cmd:hhmean} come from the same estimation and can be displayed on replay
+({cmd:equaids, elasticities(households)}). The names of version 1.0.0 are
+accepted: {cmd:aggregate} for {cmd:market}, {cmd:means} for {cmd:households},
+{cmd:household} for {cmd:hhmean}.
+
+{phang}
+{opt hhsize(varname)} gives the size of the household, required by
+{cmd:elasticities(individuals)}; it does not enter the model (add it to
+{opt demographics()} for that).
 
 {phang}
 {opt compensated} adds the table of the compensated price elasticities;
@@ -242,11 +394,52 @@ household elasticities, by contrast, divides by each predicted share: on
 small goods a few households with shares near zero drive it.
 
 {pstd}
-{bf:Standard errors.} The influence function of an aggregate elasticity has
-two terms, the sampling of the households (the summary is taken over a
-sample) and the estimation of the coefficients; both are analytic. They agree
-with the bootstrap of the households and with the Rao-Wu bootstrap of a
-survey design; the design variance equals Stata's own linearization.
+{bf:Standard errors.} The influence function of an aggregate (market)
+elasticity has two terms, the sampling of the households (the summary is taken
+over a sample) and the estimation of the coefficients; both are analytic. They
+agree with the bootstrap of the households and with the Rao-Wu bootstrap of a
+survey design; the design variance equals Stata's own linearization. For the
+elasticities at the means ({cmd:households}, {cmd:individuals}) the sampling
+term is that of the means of ln p, ln x and z, and for {cmd:hhmean} that of the
+mean of the household elasticities; their derivatives with respect to the
+coefficients and to the means are taken by central differences.
+
+{marker selection}{...}
+{pstd}
+{bf:The selection of the buyers.} With {opt selection}, a table under the
+header reports, for each corrected good, the percentage of buyers, the
+pseudo-R2 of its probit (McFadden), the households predicted with probability
+0 or 1 ({it:Perfect}: separation), the variance inflation {it:VIF(beta)} of the
+expenditure coefficient due to the selection term, 1/(1-rho^2) with rho the
+correlation of phi_i and of the column of beta_i in the gradient of the
+share, given the other columns, and delta_i with its z. Above 10, phi_i is
+almost collinear with ln x: the correction multiplies the standard error of
+the expenditure coefficient by more than 3 and rests on the curvature of the
+probit; the good can be left uncorrected with {opt selgoods()}, or a
+variable of the probit only added in {opt selvars()}. The probits are
+estimated good by good (a probit for each good, not a multivariate probit): the
+two-step estimator is consistent, not efficient.
+
+{pstd}
+{bf:When to trust the analytic standard errors.} The analytic (linearized)
+standard errors assume every parameter well identified and the estimate inside
+its domain. In a simulation of the model with every parameter strongly
+identified (700 samples of 3,000 households, zero shares, missing prices of
+the non-buyers filled by {opt pimpute()}, a count demographic, a variable of
+the probit only per good), they were 0.95 to 1.02 times the dispersion of the
+estimates for delta, rho and the market elasticities. On survey data they can
+diverge from the bootstrap when identification is weak: when the probits
+barely separate buyers from non-buyers and no variable of the probit only is
+available, delta is almost collinear with the rest of the share; and the
+correction can move the estimate of Ray's scaling towards its boundary
+m0(z) = 1 + rho'z > 0 (a count demographic such as the household size is the
+usual case). The estimator is then close to irregular, the linearization
+understates the uncertainty, and the bootstrap draws spread widely. The
+coefficient rho itself is often weakly identified by Ray's scaling; its
+standard error should not be read too literally, while the elasticities are
+less affected. {cmd:equaids} reports the distance of the estimate to the
+boundary in standard errors ({cmd:e(m0_t)}) and warns below 3; with the
+warning, or when in doubt, use {cmd:vce(bootstrap)}.
 
 {pstd}
 {bf:Diagnostics.} Before estimating, {cmd:equaids} refuses what is not
@@ -301,7 +494,7 @@ expenditure, one panel per good, as {cmd:estat engel} after {cmd:easi} and
 {bf:At the means} (the default), the model's share is evaluated over a grid of
 log expenditure (the weighted percentiles of ln x, tails trimmed), with the
 log prices and the demographics at their weighted means, the point of
-{opt elasticities(means)}. It is the exact function of the estimate: linear
+{opt elasticities(households)}. It is the exact function of the estimate: linear
 in ln x for AIDS, quadratic for QUAIDS. The band is the delta method with the
 analytic Jacobian and the variance of the estimate, {cmd:e(V_free)}: robust,
 by cluster or by design as estimated, with t on the design degrees of freedom
@@ -320,6 +513,12 @@ shares are smoothed with the same bandwidth and drawn dashed: where the two
 curves part, the functional form does not follow the data. The comparison is
 fair only as observed, since the observed shares vary with prices and
 demographics along ln x; {opt observed} is therefore refused at the means.
+
+{pstd}
+{bf:After selection}, the curves are those of the expected shares,
+Phi f + delta phi, at the means of the variables of the probits too; the band
+includes the estimation of the probits ({cmd:e(V_sel_psi)}), and no turning
+point is marked, the expected share not being quadratic in ln x.
 
 {pstd}
 {cmd:estat engel} stores {cmd:r(n)} and, at the means, {cmd:r(turn)}; with
@@ -343,6 +542,8 @@ demographics along ln x; {opt observed} is therefore refused at the means.
 {synopt:{cmd:e(stalled)}}1 if the iterations stopped for lack of progress{p_end}
 {synopt:{cmd:e(rcond)}}reciprocal condition number of the scaled information matrix{p_end}
 {synopt:{cmd:e(m0_min)}, {cmd:e(n_lneg)}, {cmd:e(n_shout)}}diagnostics of the estimate{p_end}
+{synopt:{cmd:e(m0_t)}}distance of the estimate to the boundary m0(z) > 0, in standard errors{p_end}
+{synopt:{cmd:e(N_reps)}, {cmd:e(N_reps_ok)}}bootstrap replications, successful ones ({cmd:vce(bootstrap)}){p_end}
 {synopt:{cmd:e(N_clust)}}number of clusters ({cmd:vce(cluster)}){p_end}
 {synopt:{cmd:e(N_strata)}, {cmd:e(N_psu)}, {cmd:e(df_r)}}design ({cmd:vce(svy)}){p_end}
 {synopt:{cmd:e(chk_engel)}, ...}residuals of the aggregation identities{p_end}
@@ -351,10 +552,18 @@ demographics along ln x; {opt observed} is therefore refused at the means.
 {p2col 5 22 26 2: Macros}{p_end}
 {synopt:{cmd:e(cmd)}}{cmd:equaids}{p_end}
 {synopt:{cmd:e(model)}}{cmd:QUAIDS} or {cmd:AIDS}{p_end}
-{synopt:{cmd:e(vce)}}{cmd:robust}, {cmd:cluster}, {cmd:svy} or {cmd:conventional}{p_end}
+{synopt:{cmd:e(vce)}}{cmd:robust}, {cmd:cluster}, {cmd:svy}, {cmd:conventional} or {cmd:bootstrap}{p_end}
+{synopt:{cmd:e(boot_design)}, {cmd:e(boot_seed)}}resampling unit and seed ({cmd:vce(bootstrap)}){p_end}
 {synopt:{cmd:e(anot_rule)}}rule of alpha_0, or {cmd:user}{p_end}
-{synopt:{cmd:e(elasticities)}}summary reported{p_end}
+{synopt:{cmd:e(elasticities)}}{cmd:market}, {cmd:households}, {cmd:individuals} or {cmd:hhmean}{p_end}
+{synopt:{cmd:e(hhsize)}}the household size variable ({opt hhsize()}){p_end}
+{synopt:{cmd:e(wtype)}, {cmd:e(wexp)}}the weight used (times {opt hhsize()} under {cmd:individuals}){p_end}
 {synopt:{cmd:e(data_notes)}}notes of the data diagnostics{p_end}
+{synopt:{cmd:e(pimpute)}}the grouping variables of {opt pimpute()}{p_end}
+{synopt:{cmd:e(selection)}}{cmd:shonkwiler-yen} with {opt selection}{p_end}
+{synopt:{cmd:e(selgoods)}}the goods corrected; {cmd:e(selvars)} the {opt selvars()} specification{p_end}
+{synopt:{cmd:e(sel_z_}{it:good}{cmd:)}}the variables of the probit of {it:good} only{p_end}
+{synopt:{cmd:e(sel_vars)}}all the variables of {opt selvars()}{p_end}
 
 {p2col 5 22 26 2: Matrices}{p_end}
 {synopt:{cmd:e(b)}, {cmd:e(V)}}coefficients (Poi's parameterization) and their variance{p_end}
@@ -362,31 +571,98 @@ demographics along ln x; {opt observed} is therefore refused at the means.
 {synopt:{cmd:e(Sigma)}}covariance of the residuals{p_end}
 {synopt:{cmd:e(elas_x)}, {cmd:e(elas_u)}, {cmd:e(elas_c)}}aggregate expenditure, uncompensated and compensated elasticities (rows: goods, columns: prices){p_end}
 {synopt:{cmd:e(V_elas_x)}, {cmd:e(V_elas_u)}, {cmd:e(V_elas_c)}}their variances{p_end}
-{synopt:{cmd:e(elas_xm)}, ...}the same at the means ({cmd:m}) and household mean ({cmd:h}){p_end}
-{synopt:{cmd:e(aggshare)}}aggregate budget shares{p_end}
+{synopt:{cmd:e(elas_xm)}, {cmd:e(V_elas_xm)}, ...}the same at the means ({cmd:m}: {cmd:households}, {cmd:individuals}) and for the household mean ({cmd:h}: {cmd:hhmean}){p_end}
+{synopt:{cmd:e(aggshare)}}aggregate budget shares (market){p_end}
+{synopt:{cmd:e(shares_m)}, {cmd:e(shares_h)}}predicted shares at the means, and mean of the predicted shares{p_end}
 {synopt:{cmd:e(vif)}, {cmd:e(demo_stats)}}data diagnostics{p_end}
+{synopt:{cmd:e(sel_delta)}, {cmd:e(se_sel_delta)}}delta and its standard error by good (missing if not corrected){p_end}
+{synopt:{cmd:e(sel_alpha)}}probit coefficients by good: constant, ln(p/x), demographics, {opt selvars()} (missing where a variable does not enter){p_end}
+{synopt:{cmd:e(sel_diag)}}by good: percentage of buyers, pseudo-R2, perfectly predicted, VIF of beta{p_end}
+{synopt:{cmd:e(sel_psi)}, {cmd:e(V_sel_psi)}}free parameters and probit coefficients, and their variance ({cmd:estat engel}){p_end}
 
 
 {marker examples}{...}
 {title:Examples}
 
-{pstd}Poi's data (four food groups){p_end}
-{phang2}{cmd:. webuse food}{p_end}
+{pstd}
+The examples use Poi's food data ({cmd:webuse food}) and the Mexican cereals
+installed with the package ({cmd:sysuse mexico_2014_cereals}). Each one runs
+from its blue links: in the command window, in the dialog box (filled in; click
+OK), or as a do-file opened in the Do-file Editor. The data in memory are not
+lost: the command window and the do-file give them back at the end, even after
+an error; the dialog box, which needs the example data in memory, refuses to
+replace data that have unsaved changes. Files written by the examples go to
+Stata's temporary folder. The links call {cmd:equaids_examples} {it:#}
+[{cmd:, db} | {cmd:do}].
+
+{title:Example 1: The elasticities of four food groups (Poi's data)}
+
+{phang2}{cmd:. webuse food, clear}{p_end}
 {phang2}{cmd:. equaids w1-w4, prices(p1-p4) expenditure(expfd) snames(meat fruitveg bread dairy)}{p_end}
 {phang2}{cmd:. equaids, compensated checks stars}{p_end}
-{phang2}{cmd:. equaids, elasticities(household)}{p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 1":example 1: click to run in command window}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 1, db":click to run in dialog box}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 1, do":open as a do-file}){p_end}
 
-{pstd}Survey design{p_end}
-{phang2}{cmd:. svyset psu [pw=weight], strata(stratum)}{p_end}
-{phang2}{cmd:. equaids w1-w5, prices(p1-p5) expenditure(x) demographics(hhsize) vce(svy)}{p_end}
+{title:Example 2: The types of elasticities}
 
-{pstd}Engel curves{p_end}
+{pstd}The market elasticities (the default), those of the household at the means, and the mean of the household elasticities, all from the same estimation.{p_end}
+{phang2}{cmd:. webuse food, clear}{p_end}
+{phang2}{cmd:. equaids w1-w4, prices(p1-p4) expenditure(expfd) snames(meat fruitveg bread dairy) notable}{p_end}
+{phang2}{cmd:. equaids, elasticities(market)}{p_end}
+{phang2}{cmd:. equaids, elasticities(households)}{p_end}
+{phang2}{cmd:. equaids, elasticities(hhmean)}{p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 2":example 2: click to run in command window}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 2, do":open as a do-file}){p_end}
+
+{title:Example 3: Survey design (Mexican cereals)}
+
+{pstd}The sample keeps the households with all their prices; ten strata then have a single PSU, which {cmd:singleunit(centered)} handles (with {cmd:singleunit(missing)} their standard errors would be missing).{p_end}
+{phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
+{phang2}{cmd:. svyset psu [pweight=sweight], strata(strata) vce(linearized) singleunit(centered)}{p_end}
+{phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp, prices(pcorn pwheat price pother pcomp) expenditure(hh_current_inc) demographics(hhsize isMale) vce(svy)}{p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 3":example 3: click to run in command window}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 3, db":click to run in dialog box}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 3, do":open as a do-file}){p_end}
+
+{title:Example 4: The elasticities of the individual (Mexican cereals)}
+
+{phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
+{phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp [aw=sweight], prices(pcorn pwheat price pother pcomp) expenditure(hh_current_inc) elasticities(individuals) hhsize(hhsize)}{p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 4":example 4: click to run in command window}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 4, db":click to run in dialog box}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 4, do":open as a do-file}){p_end}
+
+{title:Example 5: Engel curves}
+
+{pstd}Run from its link, the example writes the curves to Stata's temporary folder.{p_end}
+{phang2}{cmd:. webuse food, clear}{p_end}
+{phang2}{cmd:. equaids w1-w4, prices(p1-p4) expenditure(expfd) notable}{p_end}
 {phang2}{cmd:. estat engel}{p_end}
 {phang2}{cmd:. estat engel, lnx level(90) data(curves, replace)}{p_end}
 {phang2}{cmd:. estat engel, asobserved observed}{p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 5":example 5: click to run in command window}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 5, do":open as a do-file}){p_end}
 
-{pstd}Diagnose before estimating{p_end}
+{title:Example 6: Diagnose a specification before estimating it}
+
+{phang2}{cmd:. webuse food, clear}{p_end}
 {phang2}{cmd:. equaidsdiag w1-w4, prices(p1-p4) expenditure(expfd) sensitivity}{p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 6":example 6: click to run in command window}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 6, db":click to run in dialog box}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 6, do":open as a do-file}){p_end}
+
+{title:Example 7: The non-buyers (Mexican cereals)}
+
+{pstd}The prices of the non-buyers are filled from their PSU, else from the urban or rural area; the four cereals with zero shares are corrected, with the share of employed members in the probits only; the standard errors are those of a bootstrap of the whole procedure, household size in Ray's scaling bringing the estimate near its boundary under the correction (a few minutes); then the Engel curves of the expected shares.{p_end}
+{phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
+{phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp [pw=sweight], prices(pcorn pwheat price pother pcomp)}
+{cmd:expenditure(hh_current_inc) demographics(hhsize isMale) pimpute(psu rururb)}
+{cmd:selection selvars(perc_ocupa) vce(bootstrap, reps(50) seed(1))}{p_end}
+{phang2}{cmd:. estat engel}{p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 7":example 7: click to run in command window}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 7, db":click to run in dialog box}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 7, do":open as a do-file}){p_end}
 
 
 {marker references}{...}
@@ -410,10 +686,16 @@ Poi, B. P. 2012. Easy demand-system estimation with quaids. {it:Stata Journal}
 12: 433-446.
 
 {phang}
-Ray, R. 1983. Measuring the costs of children. {it:Journal of Public
-Economics} 22: 89-102.
+Ray, R. 1983. Measuring the costs of children.
+{it:Journal of Public Economics} 22: 89-102.
+
+{phang}
+Shonkwiler, J. S., and S. T. Yen. 1999. Two-step estimation of a censored
+system of equations. {it:American Journal of Agricultural Economics} 81:
+972-982.
 
 
 {title:Author}
 
 {pstd}Abdelkrim Araar, Universit{c e'} Laval / PEP, aabd@ecn.ulaval.ca{p_end}
+{pstd}Version 1.1.0. Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}

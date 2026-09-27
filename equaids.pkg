@@ -1,27 +1,37 @@
 v 3
-d equaids: AIDS and QUAIDS demand systems for survey data - aggregate elasticities with analytic standard errors (robust, cluster, svy)
+d equaids: AIDS and QUAIDS demand systems for survey data - elasticities of the market, the household or the individual, with analytic standard errors (robust, cluster, svy); missing prices and correction for the non-buyers
 d
 d Author: Abdelkrim Araar, Universite Laval / PEP
 d Support: aabd@ecn.ulaval.ca
-d Version : 1.0.0
+d Version : 1.1.0
 d License : GPL-3.0-or-later
 d
 d Almost ideal demand system (Deaton and Muellbauer 1980) and its quadratic
 d extension (Banks, Blundell and Lewbel 1997), demographics by Ray's scaling,
 d estimated by iterated FGNLS (Gauss-Newton, analytic Jacobian, in Mata).
-d Aggregate elasticities (default), at the means and household mean; analytic
-d standard errors from influence functions, robust, by cluster or by survey
-d design (svyset). Diagnostics before estimation (equaidsdiag), estat
-d diagnostics, Engel curves after estimation (estat engel), dialog box.
+d Elasticities of the market (aggregate, the default), of the household (at
+d the means), of the individual (weights times household size) and the mean of
+d the household elasticities, all with analytic standard errors from
+d influence functions, robust, by cluster or by survey design (svyset), or a
+d bootstrap of the whole procedure. Missing prices of the non-buyers filled by
+d group means (pimpute), correction for the non-buyers (Shonkwiler and Yen
+d 1999, selection) with the probits in the standard errors.
+d Diagnostics before estimation (equaidsdiag), estat diagnostics, Engel curves
+d after estimation (estat engel), dialog box, examples of the help run from
+d links (equaids_examples); example data installed (sysuse mexico_2014_cereals).
 d
 d Requires: Stata 14.2 or later
 d
-d Distribution-Date: 20260925
+d Distribution-Date: 20260927
 d
 f src/equaids.ado
 f src/equaids.sthlp
 f src/equaids.dlg
 f src/equaids_estat.ado
 f src/_equaids_tabstars.ado
+f src/_equaids_pimpute.ado
 f src/equaidsdiag.ado
 f src/equaidsdiag.sthlp
+f src/equaids_examples.ado
+F examples/mexico_2014_cereals.dta
+f examples/mexico_2014_cereals.dta

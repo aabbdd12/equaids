@@ -1,4 +1,4 @@
-*! equaids_estat 1.0.0  2026-09-25  Abdelkrim Araar
+*! equaids_estat 1.1.0  2026-09-27  Abdelkrim Araar
 *! estat after equaids:
 *!   estat diagnostics   the diagnostics of the estimate and of the data
 *!   estat engel         the Engel curves (layout of easi and duvm)
@@ -78,6 +78,13 @@ program define _equaids_estat_engel, rclass
         else                   qui gen double `lp`k'' = `v'
         local lnp `lnp' `lp`k''
     }
+    * prices filled at estimation (pimpute()): the same imputation, on the
+    * estimation sample, whose households are the donors
+    if "`e(pimpute)'" != "" {
+        tempvar es
+        qui gen byte `es' = e(sample)
+        qui _equaids_pimpute `lnp', touse(`es') wt(`wt') groups(`e(pimpute)')
+    }
     local demos `e(demographics)'
 
     * the band: the variance of the estimate (robust, cluster or design), t
@@ -114,12 +121,29 @@ program define _equaids_estat_engel, rclass
         }
         local zopt zm(`ZM')
     }
+    * selection: the expected shares E[w] = Phi f + delta phi, at the means of
+    * the probit-only variables too
+    local sel = ("`e(selection)'" != "")
+    local qvars `e(sel_vars)'
+    local qopt
+    if `sel' & "`qvars'" != "" {
+        tempname QM
+        matrix `QM' = J(1, `: word count `qvars'', .)
+        local k 0
+        foreach v of local qvars {
+            local ++k
+            qui summarize `v' [aw=`wt'] if `touse', meanonly
+            matrix `QM'[1, `k'] = r(mean)
+        }
+        local qopt qm(`QM')
+    }
 
     preserve
     qui keep if `touse'
     if `asobs' {
         local zv
         if `K' > 0 local zv z(`demos')
+        if `sel' & "`qvars'" != "" local zv `zv' q(`qvars')
         quietly equaids, _engel mode(obs) lp(`lnp') lx(`lnxv') `zv' touse(`touse') out(_eqr)
     }
     * only what the curves need (the data may hold a pctile or an lnexp)
@@ -145,7 +169,7 @@ program define _equaids_estat_engel, rclass
     if !`asobs' {
         local nv = cond(`ci', "", "novar")
         quietly equaids, _engel mode(grid) lx(`gx') touse(`gt') out(_eqg) ///
-            lpm(`LPM') `zopt' `nv'
+            lpm(`LPM') `zopt' `qopt' `nv'
         if !r(ok) {
             di as err "m0(z) <= 0 at the means of the demographics: no Engel curve"
             exit 459
@@ -250,7 +274,10 @@ program define _equaids_estat_engel, rclass
         }
         local nt `""Budget share, `what'""'
         local nt2
-        if !`asobs' {
+        if !`asobs' & `sel' {
+            local nt2 "expected shares Phi f + delta phi (selection of the buyers)"
+        }
+        else if !`asobs' {
             if `quad' local nt2 "quadratic in ln x"
             else      local nt2 "linear in ln x (AIDS)"
             if `anyturn' local nt2 "`nt2'; vertical line: turning point"

@@ -1,0 +1,208 @@
+*! equaids_examples 1.1.0  2026-09-27  Abdelkrim Araar
+*! The examples of help equaids and help equaidsdiag, run from their links.
+*!   equaids_examples #          run example # in the command window
+*!   equaids_examples #, db      open the dialog box of equaids filled in for example #
+*!   equaids_examples #, do      open example # as a do-file in the Do-file Editor
+*! The data in memory are never lost: the run keeps them (preserve) and gives
+*! them back at the end, even after an error or a Break; the do-file does the
+*! same; the dialog box, which needs the example data in memory, refuses to
+*! replace data of the user that have unsaved changes (the example data it
+*! loads are marked and can be replaced). Files written by the examples go to
+*! Stata's temporary folder, c(tmpdir), never to the working folder.
+program define equaids_examples
+    version 14.2
+    syntax anything(name=ex id="example number") [, DB DO NOEDIT]
+    capture confirm integer number `ex'
+    if _rc | !inrange(`ex', 1, 7) {
+        di as err "equaids_examples: the examples are numbered 1 to 7 (see help equaids)"
+        exit 198
+    }
+    if "`db'" != "" & "`do'" != "" {
+        di as err "equaids_examples: db and do cannot be combined"
+        exit 198
+    }
+    local T = c(tmpdir)
+    local T : subinstr local T "\" "/", all
+    if substr("`T'", -1, 1) != "/" local T "`T'/"
+    local F "w1-w4, prices(p1-p4) expenditure(expfd)"
+    local W "wcorn wwheat wrice wother wcomp"
+    local P "pcorn pwheat price pother pcomp"
+    local n 0
+    * the data of each example: Poi's food data (webuse) or the Mexican cereals
+    * installed with the package (sysuse)
+    local data "webuse food, clear"
+    if `ex' == 1 {
+        local title "The elasticities of four food groups (Poi's data)"
+        local c1 "equaids `F' snames(meat fruitveg bread dairy)"
+        local c2 "equaids, compensated checks stars"
+        local n 2
+    }
+    else if `ex' == 2 {
+        local title "The types of elasticities: market (the default), households, hhmean"
+        local c1 "equaids `F' snames(meat fruitveg bread dairy) notable"
+        local c2 "equaids, elasticities(market)"
+        local c3 "equaids, elasticities(households)"
+        local c4 "equaids, elasticities(hhmean)"
+        local n 4
+    }
+    else if `ex' == 3 {
+        local data "sysuse mexico_2014_cereals, clear"
+        local title "Survey design (Mexican cereals)"
+        local c1 "svyset psu [pweight=sweight], strata(strata) vce(linearized) singleunit(centered)"
+        local c2 "equaids `W', prices(`P') expenditure(hh_current_inc) demographics(hhsize isMale) vce(svy)"
+        local n 2
+    }
+    else if `ex' == 4 {
+        local data "sysuse mexico_2014_cereals, clear"
+        local title "The elasticities of the individual (Mexican cereals)"
+        local c1 "equaids `W' [aw=sweight], prices(`P') expenditure(hh_current_inc) elasticities(individuals) hhsize(hhsize)"
+        local n 1
+    }
+    else if `ex' == 5 {
+        local title "Engel curves after estimation"
+        local c1 "equaids `F' notable"
+        local c2 "estat engel"
+        local c3 `"estat engel, lnx level(90) data("`T'equaids_curves", replace)"'
+        local c4 "estat engel, asobserved observed"
+        local n 4
+    }
+    else if `ex' == 6 {
+        local title "Diagnose a specification before estimating it"
+        local c1 "equaidsdiag `F' sensitivity"
+        local n 1
+    }
+    else if `ex' == 7 {
+        local data "sysuse mexico_2014_cereals, clear"
+        local title "The non-buyers (Mexican cereals)"
+        local c1 "equaids `W' [pw=sweight], prices(`P') expenditure(hh_current_inc) demographics(hhsize isMale) pimpute(psu rururb) selection selvars(perc_ocupa) vce(bootstrap, reps(50) seed(1))"
+        local c2 "estat engel"
+        local n 2
+    }
+
+    * ---- as a do-file, in Stata's temporary folder ----
+    if "`do'" != "" {
+        local fn "`T'equaids_example_`ex'.do"
+        tempname fh
+        file open `fh' using "`fn'", write text replace
+        file write `fh' "* equaids, example `ex': `title'" _n
+        file write `fh' "* Written by equaids_examples in Stata's temporary folder; save it elsewhere to keep it." _n
+        file write `fh' "* preserve keeps the data in memory and gives them back when this do-file ends;" _n
+        file write `fh' "* delete that line to keep working on the example data." _n
+        file write `fh' "preserve" _n
+        file write `fh' "`data'" _n
+        forvalues i = 1/`n' {
+            file write `fh' `"`c`i''"' _n
+        }
+        file close `fh'
+        if "`noedit'" == "" doedit "`fn'"
+        di as txt "(example `ex' written to " as res `"`fn'"' as txt ")"
+        exit
+    }
+
+    * ---- in the dialog box: needs the example data in memory ----
+    if "`db'" != "" {
+        if inlist(`ex', 2, 5) {
+            di as err "equaids_examples: example `ex' runs commands after the estimation; run it in the command window"
+            exit 198
+        }
+        local isex : char _dta[equaids_example]
+        if c(changed) & "`isex'" != "1" {
+            di as err "equaids_examples, db: the data in memory have changes not saved;"
+            di as err "save them (or clear) first: the dialog box needs the example data in memory"
+            exit 4
+        }
+        qui `data'
+        char _dta[equaids_example] "1"
+        if `ex' == 3 qui svyset psu [pweight=sweight], strata(strata) vce(linearized) singleunit(centered)
+        di as txt "(example data loaded for the dialog box)"
+        db equaids
+        * Stata keeps the state of a dialog between two openings: every control
+        * an example may set is first put back to its default
+        .equaids_dlg.main.cb_act.setvalue "est"
+        .equaids_dlg.main.rb_plev.seton
+        .equaids_dlg.main.rb_xlev.seton
+        .equaids_dlg.main.rb_quaids.seton
+        .equaids_dlg.main.ed_snames.setvalue ""
+        .equaids_dlg.main.vl_demo.setvalue ""
+        .equaids_dlg.main.ck_anot.setoff
+        .equaids_dlg.weights.vl_wgt.setvalue ""
+        .equaids_dlg.weights.rb_none.seton
+        .equaids_dlg.se.rb_robust.seton
+        .equaids_dlg.se.sp_reps.setvalue 200
+        .equaids_dlg.se.ed_seed.setvalue ""
+        .equaids_dlg.se.ck_bsvy.setoff
+        .equaids_dlg.rpt.cb_el.setvalue "market"
+        .equaids_dlg.rpt.vn_hhs.setvalue ""
+        .equaids_dlg.rpt.ck_comp.setoff
+        .equaids_dlg.rpt.ck_checks.setoff
+        .equaids_dlg.rpt.ck_stars.setoff
+        .equaids_dlg.rpt.ck_notab.setoff
+        .equaids_dlg.rpt.fi_save.setvalue ""
+        .equaids_dlg.dg.ck_sens.setoff
+        .equaids_dlg.main.vl_pimp.setvalue ""
+        .equaids_dlg.sel.ed_selg.setvalue ""
+        .equaids_dlg.sel.vl_all.setvalue ""
+        forvalues r = 1/10 {
+            .equaids_dlg.sel.ed_g`r'.setvalue ""
+            .equaids_dlg.sel.vl_v`r'.setvalue ""
+        }
+        .equaids_dlg.sel.cb_ng.setvalue "0"
+        .equaids_dlg.sel.ck_sel.setoff
+        * the example
+        if `ex' == 1 {
+            .equaids_dlg.main.vl_shares.setvalue "w1 w2 w3 w4"
+            .equaids_dlg.main.vl_prices.setvalue "p1 p2 p3 p4"
+            .equaids_dlg.main.vn_exp.setvalue "expfd"
+            .equaids_dlg.main.ed_snames.setvalue "meat fruitveg bread dairy"
+        }
+        if `ex' == 3 {
+            .equaids_dlg.main.vl_shares.setvalue "`W'"
+            .equaids_dlg.main.vl_prices.setvalue "`P'"
+            .equaids_dlg.main.vn_exp.setvalue "hh_current_inc"
+            .equaids_dlg.main.vl_demo.setvalue "hhsize isMale"
+            .equaids_dlg.se.rb_svy.seton
+        }
+        if `ex' == 4 {
+            .equaids_dlg.main.vl_shares.setvalue "`W'"
+            .equaids_dlg.main.vl_prices.setvalue "`P'"
+            .equaids_dlg.main.vn_exp.setvalue "hh_current_inc"
+            .equaids_dlg.weights.rb_aw.seton
+            .equaids_dlg.weights.vl_wgt.setvalue "sweight"
+            .equaids_dlg.rpt.cb_el.setvalue "individuals"
+            .equaids_dlg.rpt.vn_hhs.setvalue "hhsize"
+        }
+        if `ex' == 7 {
+            .equaids_dlg.main.vl_shares.setvalue "`W'"
+            .equaids_dlg.main.vl_prices.setvalue "`P'"
+            .equaids_dlg.main.vn_exp.setvalue "hh_current_inc"
+            .equaids_dlg.main.vl_demo.setvalue "hhsize isMale"
+            .equaids_dlg.main.vl_pimp.setvalue "psu rururb"
+            .equaids_dlg.weights.rb_pw.seton
+            .equaids_dlg.weights.vl_wgt.setvalue "sweight"
+            .equaids_dlg.sel.ck_sel.seton
+            .equaids_dlg.sel.vl_all.setvalue "perc_ocupa"
+            .equaids_dlg.se.rb_boot.seton
+            .equaids_dlg.se.sp_reps.setvalue 50
+            .equaids_dlg.se.ed_seed.setvalue "1"
+        }
+        if `ex' == 6 {
+            .equaids_dlg.main.cb_act.setvalue "diag"
+            .equaids_dlg.main.vl_shares.setvalue "w1 w2 w3 w4"
+            .equaids_dlg.main.vl_prices.setvalue "p1 p2 p3 p4"
+            .equaids_dlg.main.vn_exp.setvalue "expfd"
+            .equaids_dlg.dg.ck_sens.seton
+        }
+        exit
+    }
+
+    * ---- in the command window: the data in memory are kept ----
+    preserve
+    qui `data'
+    di as txt _n "{hline 78}" _n "equaids, example `ex': " as res "`title'" _n as txt "{hline 78}"
+    di as txt `"(example data: `data'; the data in memory come back at the end)"'
+    forvalues i = 1/`n' {
+        di as txt _n `". `c`i''"'
+        `c`i''
+    }
+    if `ex' == 5 di as txt _n `"(files written to `T')"'
+end

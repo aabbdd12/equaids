@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0  25sep2026}{...}
+{* *! version 1.1.0  27sep2026}{...}
 {* the threshold of D4 is provisional: to be set after the audit on three data sets (audit/diag/)}{...}
 {vieweralsosee "equaids" "help equaids"}{...}
 {viewerjumpto "Syntax" "equaidsdiag##syntax"}{...}
@@ -12,6 +12,8 @@
 {p2colset 5 20 22 2}{...}
 {p2col:{cmd:equaidsdiag} {hline 2}}Diagnose an AIDS/QUAIDS specification before estimating it{p_end}
 {p2colreset}{...}
+
+{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.1.0{txt} (27/09/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
 
 
 {marker syntax}{...}
@@ -34,6 +36,8 @@ that belong to the estimator alone ({opt vce()}, {opt elasticities()},
 {synopt:{opt sens:itivity}}estimate the model at several values of alpha_0 (D6){p_end}
 {synopt:{opt a0l:ist(numlist)}}the values of alpha_0; default: the smallest log expenditure minus 0.1, and 1, 2 and 4 below; implies {opt sensitivity}{p_end}
 {synopt:{opt stab:ility}}estimate the model again without each demographic in turn (D7){p_end}
+{synopt:{opt pimp:ute(varlist)}}fill the missing prices as {cmd:equaids} does, before the diagnosis{p_end}
+{synopt:{opt sel:ection}, {opt selg:oods()}, {opt selv:ars()}}the correction for the non-buyers, passed to the estimations of D6 and D7{p_end}
 {synoptline}
 
 
@@ -196,6 +200,9 @@ estimate.
 {phang2}{cmd:. equaidsdiag w1-w4, prices(p1-p4) expenditure(expfd)}{p_end}
 {phang2}{cmd:. equaidsdiag w1-w4, prices(p1-p4) expenditure(expfd) anot(10)}{p_end}
 {phang2}{cmd:. equaidsdiag w1-w4, prices(p1-p4) expenditure(expfd) sensitivity}{p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 6":click to run in command window}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 6, db":click to run in dialog box}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 6, do":open as a do-file}){p_end}
 
 {pstd}With demographic variables {it:z1} and {it:z2}:{p_end}
 {phang2}{cmd:. equaidsdiag} {it:shares}{cmd:, prices(}{it:prices}{cmd:) expenditure(}{it:x}{cmd:) demographics(}{it:z1 z2}{cmd:) stability}{p_end}
@@ -209,10 +216,12 @@ the equaids Stata module. Technical note, Zenodo.
 {browse "https://doi.org/10.5281/zenodo.22959991":doi:10.5281/zenodo.22959991}.
 
 {phang}
-Belsley, D. A., E. Kuh, and R. E. Welsch. 1980. {it:Regression Diagnostics:
-Identifying Influential Data and Sources of Collinearity}. New York: Wiley.
+Belsley, D. A., E. Kuh, and R. E. Welsch. 1980.
+{it:Regression Diagnostics: Identifying Influential Data and Sources of Collinearity}.
+New York: Wiley.
 
 
 {title:Author}
 
 {pstd}Abdelkrim Araar, Universit{c e'} Laval / PEP, aabd@ecn.ulaval.ca{p_end}
+{pstd}Version 1.1.0 (package equaids). Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}

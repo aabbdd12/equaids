@@ -1,4 +1,4 @@
-*! equaidsdiag 1.0.0  2026-09-25  Abdelkrim Araar
+*! equaidsdiag 1.1.0  2026-09-27  Abdelkrim Araar
 *! Diagnostics of an AIDS/QUAIDS specification before estimating it: data,
 *! prices, expenditure and alpha_0, demographics, conditioning of the design
 *! at the starting point, small goods; optionally the sensitivity of the
@@ -16,7 +16,8 @@ program define equaidsdiag, rclass
         [ PRices(varlist numeric) LNPRices(varlist numeric)                    ///
           EXPenditure(varname numeric) LNEXPenditure(varname numeric)          ///
           DEMOgraphics(varlist numeric) ANOT(string) noQUadratic               ///
-          SENSitivity A0list(numlist) STABility * ]
+          SENSitivity A0list(numlist) STABility PIMPute(varlist)               ///
+          SELection SELGoods(namelist) SELVars(string) * ]
 
     local shares `varlist'
     local M : word count `shares'
@@ -41,12 +42,15 @@ program define equaidsdiag, rclass
     quietly count if `all'
     local N0 = r(N)
     local lost ""
-    foreach v in `shares' `pv' `expenditure' `lnexpenditure' `demographics' {
+    * with pimpute(), a missing price is filled below, not a loss
+    local pvl = cond("`pimpute'" == "", "`pv'", "")
+    foreach v in `shares' `pvl' `expenditure' `lnexpenditure' `demographics' {
         quietly count if `all' & missing(`v')
         if r(N) local lost `"`lost' `v' `r(N)'"'
     }
     marksample touse
-    markout `touse' `pv' `expenditure' `lnexpenditure' `demographics'
+    if "`pimpute'" == "" markout `touse' `pv'
+    markout `touse' `expenditure' `lnexpenditure' `demographics'
     if "`weight'" != "" {
         tempvar wt
         quietly gen double `wt' `exp' if `touse'
@@ -69,7 +73,25 @@ program define equaidsdiag, rclass
             quietly gen double `l`v'' = ln(`v') if `touse'
             local lnp `lnp' `l`v''
         }
+        else if "`pimpute'" != "" {
+            tempvar l`v'
+            quietly gen double `l`v'' = `v' if `touse'
+            local lnp `lnp' `l`v''
+        }
         else local lnp `lnp' `v'
+    }
+    * missing prices filled as equaids does (pimpute()), before anything is
+    * diagnosed: the diagnosis is that of the sample equaids estimates
+    local pinotes ""
+    if "`pimpute'" != "" {
+        tempvar pwv
+        if "`weight'" != "" quietly gen double `pwv' = `wt' if `touse'
+        else quietly gen double `pwv' = 1 if `touse'
+        _equaids_pimpute `lnp', touse(`touse') wt(`pwv') groups(`pimpute') names(`shares')
+        local pinotes `"`r(notes)'"'
+        quietly count if `touse'
+        if r(N) == 0 error 2000
+        local N = r(N)
     }
     if "`expenditure'" != "" {
         tempvar lnx
@@ -112,6 +134,9 @@ program define equaidsdiag, rclass
     di as txt "point (Stone index) only."
     if `"`ignored'"' != "" di as txt "Options of the estimator ignored: " as res `"`ignored'"'
     di as txt "{hline 78}"
+    foreach l of local pinotes {
+        di as txt `"`l'"'
+    }
     if `N0' > `N' {
         di _n as txt "Households lost to missing values or nonpositive weights: " ///
             as res `N0' - `N' as txt " of " as res `N0' ///
@@ -136,6 +161,14 @@ program define equaidsdiag, rclass
     local wopt = cond("`weight'" != "", "[`weight'`exp']", "")
     local popt = cond("`prices'" != "", "prices(`prices')", "lnprices(`lnprices')")
     local xopt = cond("`expenditure'" != "", "expenditure(`expenditure')", "lnexpenditure(`lnexpenditure')")
+    * prices filled and selection of the buyers, passed to the estimations
+    local sopt ""
+    if "`pimpute'" != "" local sopt `sopt' pimpute(`pimpute')
+    if "`selection'" != "" | "`selgoods'" != "" | `"`selvars'"' != "" {
+        local sopt `sopt' selection
+        if "`selgoods'" != "" local sopt `sopt' selgoods(`selgoods')
+        if `"`selvars'"' != "" local sopt `"`sopt' selvars(`selvars')"'
+    }
 
     * ---- D6: sensitivity to alpha_0 (estimates) ----
     tempname SENS
@@ -160,7 +193,7 @@ program define equaidsdiag, rclass
         foreach a of local a0list {
             local ++r
             capture quietly equaids `shares' `wopt' if `touse', `popt' `xopt' `dopt' ///
-                anot(`a') `quadratic' noelastse notable nolog
+                anot(`a') `quadratic' `sopt' noelastse notable nolog
             if _rc {
                 matrix `SENS'[`r', 1] = `a'
                 di as txt %10.4f `a' as err "   estimation failed (r(" _rc "))"
@@ -208,7 +241,7 @@ program define equaidsdiag, rclass
         capture drop _d7f*
         capture drop _d7r*
         quietly equaids `shares' `wopt' if `touse', `popt' `xopt' demographics(`demographics') ///
-            anot(`a0') `quadratic' notable nolog saveif(_d7f)
+            anot(`a0') `quadratic' `sopt' notable nolog saveif(_d7f)
         tempname EF UF SX SU EX UX
         matrix `EF' = e(elas_x)
         matrix `UF' = e(elas_u)
@@ -223,7 +256,7 @@ program define equaidsdiag, rclass
             local others : list demographics - z
             local dopt = cond("`others'" != "", "demographics(`others')", "")
             capture quietly equaids `shares' `wopt' if `touse', `popt' `xopt' `dopt' ///
-                anot(`a0') `quadratic' notable nolog saveif(_d7r)
+                anot(`a0') `quadratic' `sopt' notable nolog saveif(_d7r)
             if _rc {
                 di as err "   `z': the model without it could not be estimated (r(" _rc "))"
                 capture drop _d7r*
