@@ -1,19 +1,20 @@
 v 3
-d equaids: AIDS and QUAIDS demand systems for survey data - elasticities of the market, the household or the individual, with analytic standard errors (robust, cluster, svy); missing prices and correction for the non-buyers
+d equaids: AIDS and QUAIDS demand systems for survey data - elasticities of the households, the individuals or the market, with analytic standard errors (robust, cluster, svy); missing prices and correction for the non-buyers
 d
 d Author: Abdelkrim Araar, Universite Laval / PEP
 d Support: aabd@ecn.ulaval.ca
-d Version : 1.1.0
+d Version : 1.2.0
 d License : GPL-3.0-or-later
 d
 d Almost ideal demand system (Deaton and Muellbauer 1980) and its quadratic
 d extension (Banks, Blundell and Lewbel 1997), demographics by Ray's scaling,
 d estimated by iterated FGNLS (Gauss-Newton, analytic Jacobian, in Mata).
-d Elasticities of the market (aggregate, the default), of the household (at
-d the means), of the individual (weights times household size) and the mean of
-d the household elasticities, all with analytic standard errors from
-d influence functions, robust, by cluster or by survey design (svyset), or a
-d bootstrap of the whole procedure. Missing prices of the non-buyers filled by
+d Elasticities of the households (the mean of the household elasticities,
+d the default), of the individuals (weights times household size), of the
+d market (aggregate) and of a reference household (at the means), and the
+d plain mean of the household elasticities, all with analytic standard errors
+d from the exact influence function of the whole procedure, robust, by
+d cluster or by survey design (svyset), or a bootstrap of the whole procedure. Missing prices of the non-buyers filled by
 d group means (pimpute), correction for the non-buyers (Shonkwiler and Yen
 d 1999, selection) with the probits in the standard errors.
 d Diagnostics before estimation (equaidsdiag), estat diagnostics, Engel curves
@@ -22,7 +23,7 @@ d links (equaids_examples); example data installed (sysuse mexico_2014_cereals).
 d
 d Requires: Stata 14.2 or later
 d
-d Distribution-Date: 20260927
+d Distribution-Date: 20260929
 d
 f src/equaids.ado
 f src/equaids.sthlp

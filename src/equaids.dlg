@@ -1,5 +1,5 @@
 /*
-    equaids.dlg  —  dialog for equaids 1.1.0 (AIDS and QUAIDS demand systems)
+    equaids.dlg  —  dialog for equaids 1.2.0 (AIDS and QUAIDS demand systems)
     db equaids
 
     One dialog for the two commands (as easi's): Action = estimate the model
@@ -16,8 +16,8 @@
       if/in        standard include (ifin)
       Weights      standard include (weights_fpai: fweight pweight aweight iweight)
       SE/Robust    robust (default), cluster, survey design, conventional
-      Reporting    elasticities (market, households, individuals + household
-                   size, hhmean), level, decimals, tables, file
+      Reporting    elasticities (households, individuals + household size,
+                   market, reference, hhmean), level, decimals, tables, file
       Estimation   tolerance, iterations, iteration log
       Diagnostic   sensitivity of the estimates to alpha_0 (equaidsdiag)
 */
@@ -644,7 +644,7 @@ DIALOG rpt, tabtitle("Reporting")
 BEGIN
   GROUPBOX gb_el       10   10  640  75, label("Elasticities")
   COMBOBOX cb_el       20   28  620   ., dropdownlist contents(ellist) values(elvals) ///
-           default(market) option(elasticities) onselchange(program el_state) label("Elasticities")
+           default(households) option(elasticities) onselchange(program el_state) label("Elasticities")
   TEXT     tx_hhs      20   53  300   ., label("Size of the household (individuals only):")
   VARNAME  vn_hhs     330   53  310   ., label("Household size") numeric
 
@@ -671,16 +671,18 @@ END
 
 LIST ellist
 BEGIN
-  Market: elasticities of total demand, at the aggregate shares (default)
-  Households: elasticities of the household, at the means of ln p, ln x and z
+  Households: mean over the households, each by its weight (default)
   Individuals: each household counts for its weight times its size
-  Mean of the household elasticities (hhmean)
+  Market: elasticities of total demand, each household by its expenditure
+  Reference household, at the means of ln p, ln x and z
+  Mean of the household elasticities, not weighted by the shares (hhmean)
 END
 LIST elvals
 BEGIN
-  market
   households
   individuals
+  market
+  reference
   hhmean
 END
 

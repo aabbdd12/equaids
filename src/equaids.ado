@@ -1,4 +1,4 @@
-*! equaids 1.1.0  2026-09-27  Abdelkrim Araar
+*! equaids 1.2.0  2026-09-29  Abdelkrim Araar
 *! AIDS and QUAIDS demand systems: iterated FGNLS by Gauss-Newton with an
 *! analytic Jacobian, in Mata.
 *!
@@ -57,15 +57,21 @@ program define _equaids_estimate, eclass sortpreserve
           SNames(string) DEC(integer 4) DISLAS(integer 1) DREGRES(integer 0)   ///
           ELASticities(string) noELASTse COMPENSated CHECKS DETail STars       ///
           SAVEres(string) noTABle SAVEIF(name) HHSize(varname numeric) PIMPute(varlist)             ///
-          SELection SELGoods(namelist) SELVars(string) ]
+          SELection SELGoods(namelist) SELVars(string) noVARiance ]
 
     timer clear 100
     timer on 100
     local shares `varlist'
     local M : word count `shares'
     local doe = ("`elastse'" == "")
+    * novariance (internal, the bootstrap replications): point estimates only,
+    * no influence functions
+    if "`variance'" == "novariance" local doe -1
     _equaids_convparse `elasticities'
     local elasticities `s(conv)'
+    * default: those of the households, or of the individuals when hhsize()
+    * is given; an explicit type wins
+    if "`elasticities'" == "" local elasticities = cond("`hhsize'" != "", "individuals", "households")
     * elasticities of the individual: each household counts for its weight
     * times its size, hhsize(), in the whole estimation
     local indiv = ("`elasticities'" == "individuals")
@@ -312,12 +318,31 @@ program define _equaids_estimate, eclass sortpreserve
     * group (pimpute(); see _equaids_pimpute.ado); the weight is the weight of
     * the estimation (times hhsize() for individuals), as estat rebuilds it
     local pinotes ""
+    local lp0 ""
+    local impg ""
     if "`pimpute'" != "" {
         tempvar pwv
         if "`weight'" != "" quietly gen double `pwv' = `wt' if `touse'
         else quietly gen double `pwv' = 1 if `touse'
         if `indiv' quietly replace `pwv' = `pwv' * `hhsize' if `touse'
+        * the log prices before filling, for the influence of the imputation
+        * on the standard errors (Mata _eq_impmap)
+        local k0 0
+        foreach v of local lnp {
+            local ++k0
+            tempvar lp0`k0'
+            quietly gen double `lp0`k0'' = `v' if `touse'
+            local lp0 `lp0' `lp0`k0''
+        }
         _equaids_pimpute `lnp', touse(`touse') wt(`pwv') groups(`pimpute') names(`shares')
+        * the groups as integers (string group variables allowed)
+        local k0 0
+        foreach g of local pimpute {
+            local ++k0
+            tempvar ig`k0'
+            quietly egen long `ig`k0'' = group(`g') if `touse'
+            local impg `impg' `ig`k0''
+        }
         local pinotes `"`r(notes)'"'
         foreach l of local pinotes {
             di as txt `"`l'"'
@@ -470,7 +495,7 @@ program define _equaids_estimate, eclass sortpreserve
         "`touse'", `anot', `quad', `tolerance', `iterate', "`log'" == "",   ///
         "`from'", "`bf'", "`Vf'", "`b'", "`V'", "`Sig'", "`EL'", `doe', ///
         "`desv'", `vmode', "`single'", `sel', "`zall'", "`selgstr'", "`zmstr'", ///
-        "`EL'sdg", "`EL'sal")
+        "`EL'sdg", "`EL'sal", "`lp0'", "`impg'")
     mata: _eq_checks("`EL'")
 
     * ---- names: Poi's stripe on the full vector ----
@@ -571,14 +596,18 @@ program define _equaids_estimate, eclass sortpreserve
     ereturn matrix vif       = `VIF'
     if `K' > 0 ereturn matrix demo_stats = `DS'
     ereturn local  data_notes `"`demonotes'"'
-    * elasticities: aggregate (default), at the means, household mean
-    foreach s in x u c xm um cm xh uh ch S ns {
+    * elasticities: market (x u c), households or individuals (xw uw cw),
+    * reference household (xm um cm), household mean (xh uh ch)
+    foreach s in x u c xw uw cw xm um cm xh uh ch S ns {
         matrix colnames `EL'`s' = `shares'
-        if inlist("`s'", "u", "c", "um", "cm", "uh", "ch") matrix rownames `EL'`s' = `shares'
+        if inlist("`s'", "u", "c", "uw", "cw", "um", "cm", "uh", "ch") matrix rownames `EL'`s' = `shares'
     }
     ereturn matrix elas_x   = `EL'x
     ereturn matrix elas_u   = `EL'u
     ereturn matrix elas_c   = `EL'c
+    ereturn matrix elas_xw  = `EL'xw
+    ereturn matrix elas_uw  = `EL'uw
+    ereturn matrix elas_cw  = `EL'cw
     ereturn matrix elas_xm  = `EL'xm
     ereturn matrix elas_um  = `EL'um
     ereturn matrix elas_cm  = `EL'cm
@@ -592,7 +621,7 @@ program define _equaids_estimate, eclass sortpreserve
     ereturn matrix shares_h = `EL'Sh
     ereturn matrix n_fsmall = `EL'ns
     * variances of the aggregate elasticities (robust, analytic)
-    if `doe' {
+    if `doe' > 0 {
         local un ""
         foreach i of local shares {
             foreach j of local shares {
@@ -611,8 +640,8 @@ program define _equaids_estimate, eclass sortpreserve
         ereturn matrix J_elas_x = `EL'Jx
         ereturn matrix J_elas_u = `EL'Ju
         ereturn matrix J_elas_c = `EL'Jc
-        * at the means (households, individuals) and the household mean
-        foreach f in m h {
+        * households or individuals, the reference household, the household mean
+        foreach f in w m h {
             matrix rownames `EL'Vx`f' = `shares'
             matrix colnames `EL'Vx`f' = `shares'
             matrix rownames `EL'Vu`f' = `un'
@@ -624,7 +653,7 @@ program define _equaids_estimate, eclass sortpreserve
             ereturn matrix V_elas_c`f' = `EL'Vc`f'
         }
     }
-    ereturn scalar elastse     = `doe'
+    ereturn scalar elastse     = (`doe' > 0)
     ereturn scalar chk_engel   = `chk_engel'
     ereturn scalar chk_cournot = `chk_cournot'
     ereturn scalar chk_homog   = `chk_homog'
@@ -787,7 +816,7 @@ program define _equaids_boot, eclass
         preserve
         quietly keep if `es'
         quietly bsample, `bso'
-        capture quietly _equaids_estimate `varlist' `wgt', `options' `itopt' vce(robust) noelastse notable nolog
+        capture quietly _equaids_estimate `varlist' `wgt', `options' `itopt' vce(robust) noelastse novariance notable nolog
         if !_rc & e(converged) == 1 {
             mata: __eq_bs = (rows(__eq_bs) ? __eq_bs \ _eq_bvec(`sel') : _eq_bvec(`sel'))
             local ++ok
@@ -815,7 +844,7 @@ program define _equaids_boot, eclass
     mata: st_replacematrix("`T'", st_matrix("`EB'Vf"))
     ereturn matrix V_free = `T'
     foreach m in x u c {
-        foreach f in "" m h {
+        foreach f in "" w m h {
             capture confirm matrix e(V_elas_`m'`f')
             if !_rc {
                 matrix `T' = e(V_elas_`m'`f')
@@ -850,15 +879,20 @@ end
 *   individuals  of the individual: the same, each household counting for its
 *                weight times its size, hhsize(), in the whole estimation
 *   hhmean       the mean of the household elasticities
-* the names of 1.0.0 are accepted: aggregate, means, household
+* the types of elasticities: households (the default), individuals (the
+* default with hhsize()), market, reference (the household at the means,
+* named households or means before 1.2.0), hhmean; the older names aggregate
+* (market), means (reference) and household (hhmean) are accepted
 program define _equaids_convparse, sclass
     local c = lower(trim(`"`0'"'))
-    if "`c'" == "" | inlist("`c'", "market", "mkt", "aggregate", "agg") local c market
-    else if inlist("`c'", "households", "means", "mean", "atmeans") local c households
+    if inlist("`c'", "market", "mkt", "aggregate", "agg") local c market
+    else if inlist("`c'", "households", "hh") local c households
     else if inlist("`c'", "individuals", "individual", "ind", "persons") local c individuals
+    else if inlist("`c'", "reference", "ref", "means", "mean", "atmeans") local c reference
     else if inlist("`c'", "hhmean", "household") local c hhmean
-    else {
-        di as err "elasticities(`0') not allowed; use market (the default), households, individuals or hhmean"
+    else if "`c'" != "" {
+        di as err "elasticities(`0') not allowed; use households (the default), individuals,"
+        di as err "market, reference or hhmean"
         exit 198
     }
     sreturn local conv "`c'"
@@ -877,12 +911,12 @@ program define _equaids_display
     _equaids_convparse `e(elasticities)'
     local est `s(conv)'
     if "`est'" == "individuals" & "`conv'" != "individuals" {
-        di as err "the estimation is for individuals (weights x `e(hhsize)'): market, households"
-        di as err "and hhmean need the estimation without elasticities(individuals)"
+        di as err "the estimation is for individuals (weights x `e(hhsize)'): households, market,"
+        di as err "reference and hhmean need the estimation without hhsize() or with another elasticities()"
         exit 198
     }
     if "`est'" != "individuals" & "`conv'" == "individuals" {
-        di as err "elasticities(individuals) needs the estimation with hhsize() and elasticities(individuals)"
+        di as err "elasticities(individuals) needs the estimation with hhsize()"
         exit 198
     }
     * what to show: what was asked for at estimation, plus anything asked now
@@ -1005,7 +1039,8 @@ program define _equaids_tables
     local nm `e(snames)'
     if "`nm'" == "" local nm `e(lhs)'
     local nm : list retokenize nm
-    local sfx = cond("`conv'" == "market", "", cond("`conv'" == "hhmean", "h", "m"))
+    local sfx = cond("`conv'" == "market", "", cond("`conv'" == "hhmean", "h", ///
+        cond("`conv'" == "reference", "m", "w")))
     local hasse = e(elastse)
     if `hasse' {
         capture confirm matrix e(V_elas_x`sfx')
@@ -1028,6 +1063,7 @@ program define _equaids_tables
         else {
             matrix `T' = e(shares_h) * 100
             local tt "Mean of the predicted budget shares (in %)"
+            if "`conv'" == "individuals" local tt "Mean of the predicted budget shares, individuals (in %)"
         }
         matrix `T' = `T'[1, 1..`n']
         matrix rownames `T' = "Share"
@@ -1124,10 +1160,16 @@ program define _equaids_elasnotes
         di as txt "Market elasticities: the elasticities of total demand; each household"
         di as txt "counts in proportion to its expenditure on the good."
     }
-    else if "`conv'" == "households" di as txt "Elasticities of the household, at the means of ln p, ln x and z."
+    else if "`conv'" == "households" {
+        di as txt "Elasticities of the households: the mean of the elasticities of the households,"
+        di as txt "each at its own prices, expenditure and demographics, and counting for its weight."
+    }
     else if "`conv'" == "individuals" {
-        di as txt "Elasticities of the individual: at the means of ln p, ln x and z, each household"
-        di as txt "counting for its weight times its size (`e(hhsize)') in the whole estimation."
+        di as txt "Elasticities of the individuals: the mean of the elasticities of the households,"
+        di as txt "each counting for its weight times its size (`e(hhsize)') in the whole estimation."
+    }
+    else if "`conv'" == "reference" {
+        di as txt "Elasticities of a reference household, at the weighted means of ln p, ln x and z."
     }
     else di as txt "Mean of the household elasticities (each household counts by its weight only)."
     if e(elastse) {
@@ -1157,8 +1199,8 @@ program define _equaids_elasnotes
             di as err "warning: the household elasticities divide by the predicted shares;"
             if `nsm' > 0 di as err "  up to `nsm' households have a predicted share below 0.001 for a good,"
             if e(n_shout) > 0 di as err "  " e(n_shout) " households have predicted shares outside [0, 1];"
-            di as err "  their elasticities are extreme and drive the mean.  The aggregate"
-            di as err "  elasticities (the default) are not affected."
+            di as err "  their elasticities are extreme and drive the mean.  The households,"
+            di as err "  individuals and market elasticities are not affected."
         }
     }
     if `dislas' == 0 di as txt "(last good omitted: {bf:dislas(1)} to show it)"
@@ -1758,9 +1800,10 @@ void _eq_elas(real rowvector th, real matrix LP, real colvector LX,
               real matrix Z, real colvector om, real scalar a0,
               real scalar qd, real scalar M, string scalar base)
 {
-    real matrix    F, MU, MUJ, Fm, MUm, MUJm, Eu, Ec, Eum, Ecm, Euh, Ech, D0
+    real matrix    F, MU, MUJ, Fm, MUm, MUJm, Eu, Ec, Eum, Ecm, Euh, Ech, D0,
+                   Euw, Ecw
     real colvector wx
-    real rowvector S, Ex, Exm, Exh, mlp, mz, nsm
+    real rowvector S, Ex, Exm, Exh, mlp, mz, nsm, Sw, Exw
     real scalar    N, i, j, sw, mlx
 
     N  = rows(LP)
@@ -1778,6 +1821,20 @@ void _eq_elas(real rowvector th, real matrix LP, real colvector LX,
             Ec[i, j] = Eu[i, j] + sum(wx :* (F[., i] + MU[., i]) :* F[., j]) / S[i]
         }
     }
+    // households (individuals: omega includes hhsize()): the same ratios,
+    // each household counting for its weight
+    Sw  = colsum(om :* F)
+    Exw = 1 :+ colsum(om :* MU) :/ Sw
+    Euw = J(M, M, .) ; Ecw = J(M, M, .)
+    for (i = 1; i <= M; i++) {
+        for (j = 1; j <= M; j++) {
+            Euw[i, j] = -D0[i, j] + sum(om :* MUJ[., (i - 1) * M + j]) / Sw[i]
+            Ecw[i, j] = Euw[i, j] + sum(om :* (F[., i] + MU[., i]) :* F[., j]) / Sw[i]
+        }
+    }
+    st_matrix(base + "xw", Exw)
+    st_matrix(base + "uw", Euw)
+    st_matrix(base + "cw", Ecw)
     // at the means
     mlp = colsum(om :* LP) :/ sw
     mlx = sum(om :* LX) / sw
@@ -1821,6 +1878,592 @@ void _eq_elas(real rowvector th, real matrix LP, real colvector LX,
 }
 
 // ---------------------------------------------------------------------------
+// influence functions of theta: the exact derivative of the whole procedure
+// with respect to the weight of each household
+//
+// The iterated FGNLS estimate is the joint solution in (theta, Sigma) of
+//   sum_h om_h psi_h = 0,   psi_h = ( G_h' S u_h ; vech(u_h u_h' - Sigma) ),
+// S = Sigma^-1 (the fixed point).  With the correction for the non-buyers the
+// probits solve their own score equations first, and alpha enters the system
+// through Phi and phi.  Moving the weight of household h moves (theta, Sigma)
+// by
+//   -H^-1 ( om_h psi_h + H_a IF_alpha,h ),
+// H the Jacobian of the summed estimating equations in (theta, vech Sigma),
+// H_a their derivative in alpha, IF_alpha the influence functions of the
+// probits (observed Hessian, _eq_probit).  H is the OBSERVED Jacobian.  The
+// Gauss-Newton information A (H_theta,theta = -A, Sigma held fixed) leaves
+// out two terms: the residuals times the second derivatives of the shares,
+// and the estimation of Sigma.  Both vanish in expectation when the model is
+// right, but not in the sample, and not at all when it is not.  Against a
+// brute-force influence function (each household's weight moved, the whole
+// procedure re-run), A^-1 gave standard errors up to 7.6% too small on Poi's
+// food data (lambda_1; Stata's demandsys, vce(robust), gives the same as A^-1)
+// and up to 9% too small on a correctly specified model with selection (rho,
+// N = 1000); with H the ratio is 1 to four decimals.  H is analytic
+// (_eq_hstack): the curvature of the model (_eq_rhess), the columns in Sigma
+// and in alpha; no evaluation of the model beyond the estimate.
+// ---------------------------------------------------------------------------
+// the summed estimating equations (theta ; vech Sigma), a row vector
+real rowvector _eq_psisum(real matrix U, pointer(real matrix) rowvector G,
+                          real matrix S, real matrix Sig, real colvector om)
+{
+    real matrix    US
+    real rowvector st
+    real scalar    i
+    US = (U * S) :* om
+    st = J(1, cols(*G[1]), 0)
+    for (i = 1; i <= cols(U); i++) st = st + cross(US[., i], *G[i])
+    return((st, vech(cross(U, om, U) - sum(om) :* Sig)'))
+}
+
+// the estimating equations household by household (weighted), N x (P + nv)
+real matrix _eq_psirows(real matrix U, pointer(real matrix) rowvector G,
+                        real matrix S, real matrix Sig, real colvector om)
+{
+    real matrix    US, Pt, Ps
+    real scalar    i, j, k, L
+    L  = cols(U)
+    US = (U * S) :* om
+    Pt = J(rows(U), cols(*G[1]), 0)
+    for (i = 1; i <= L; i++) Pt = Pt + (*G[i]) :* US[., i]
+    Ps = J(rows(U), L * (L + 1) / 2, .)
+    k = 0
+    for (j = 1; j <= L; j++) {
+        for (i = j; i <= L; i++) {
+            k++
+            Ps[., k] = om :* (U[., i] :* U[., j] :- Sig[i, j])
+        }
+    }
+    return((Pt, Ps))
+}
+
+// Phi and phi of the corrected goods at alpha (1 and 0 for the others)
+void _eq_selphi(real rowvector alpha, real matrix LP, real colvector LX,
+                real matrix Z, real matrix Q, real rowvector cix,
+                real matrix zmask, real matrix PH, real matrix PHI)
+{
+    real matrix    Sd
+    real colvector xb
+    real scalar    i, pos, p
+    PH = J(rows(LP), cols(cix), 1) ; PHI = J(rows(LP), cols(cix), 0)
+    pos = 0
+    for (i = 1; i <= cols(cix); i++) {
+        if (!cix[i]) continue
+        Sd = _eq_seldesign(LP, LX, Z, Q, zmask[i, .])
+        p  = cols(Sd)
+        xb = Sd * alpha[|pos + 1 \ pos + p|]'
+        PH[., i] = normal(xb) ; PHI[., i] = normalden(xb)
+        pos = pos + p
+    }
+}
+
+// the residuals times the second derivatives of the model, in the free
+// parameters of the system (P0 x P0): R = D' [sum_h sum_i c_hi d2 f_hi] D,
+// c = the weighted Sigma^-1 residuals (times Phi under the correction).
+// ln a(p) and ln(b(p) c(p,z)) are linear in the parameters: the curvature
+// comes only from the products B_i l and lambda_i q, q = l^2/(bc), and from
+// ln m0(z):
+//   d2 f_i = DL v_i' + v_i DL' + B_i d2l + dq e_i' + e_i dq' + lambda_i d2q
+//   d2l    = z z'/m0^2   (the block of rho)
+//   dq     = (2l/bc) DL - q DB
+//   d2q    = (2/bc) DL DL' - (2l/bc)(DL DB' + DB DL') + q DB DB' + (2l/bc) d2l
+// DL = dl/dparameters, DB = d ln(bc)/dparameters (as in _eq_elasvar),
+// v_i = dB_i/dparameters (beta_i, z eta_.i), e_i the unit vector of lambda_i.
+real matrix _eq_rhess(real rowvector th, real matrix LP, real colvector LX,
+                      real matrix Z, real scalar a0, real scalar qd,
+                      real scalar M, real matrix D, real matrix Cw)
+{
+    real scalar    N, K, Pf, nv, ob, oG, oL, oE, oR, i, k, c, d
+    real rowvector f, al, be, la, rh
+    real matrix    Ga, et, ZE, DL, DB, DQ, R, T
+    real colvector lna, lnc, m0, bc, ell, q, g1, g2, ci
+    N = rows(LP) ; K = cols(Z)
+    f  = _eq_full(th, M, K, qd)
+    Pf = cols(f)
+    _eq_unpack(f, M, K, qd, al, be, Ga, la, et, rh)
+    nv = M * (M + 1) / 2
+    ob = M ; oG = 2 * M ; oL = 2 * M + nv
+    oE = oL + qd * M ; oR = oE + K * M
+    lna = a0 :+ LP * al' :+ 0.5 :* rowsum((LP * Ga) :* LP)
+    if (K > 0) {
+        ZE = Z * et ; lnc = rowsum(ZE :* LP) ; m0 = 1 :+ Z * rh'
+    }
+    else {
+        ZE = J(N, M, 0) ; lnc = J(N, 1, 0) ; m0 = J(N, 1, 1)
+    }
+    bc  = exp(LP * be' + lnc)
+    ell = LX - ln(m0) - lna
+    q   = (ell :^ 2) :/ bc
+    DL = J(N, Pf, 0) ; DB = J(N, Pf, 0)
+    for (k = 1; k <= M; k++) {
+        DL[., k] = -LP[., k]
+        DB[., ob + k] = LP[., k]
+    }
+    for (c = 1; c <= M; c++) {
+        for (k = c; k <= M; k++) {
+            if (k == c) DL[., oG + _eq_vidx(k, c, M)] = -0.5 :* LP[., k] :^ 2
+            else        DL[., oG + _eq_vidx(k, c, M)] = -LP[., k] :* LP[., c]
+        }
+    }
+    for (d = 1; d <= K; d++) {
+        for (k = 1; k <= M; k++) DB[., oE + (d - 1) * M + k] = Z[., d] :* LP[., k]
+        DL[., oR + d] = -Z[., d] :/ m0
+    }
+    R  = J(Pf, Pf, 0)
+    g1 = J(N, 1, 0) ; g2 = J(N, 1, 0)
+    if (qd) DQ = (2 :* ell :/ bc) :* DL - q :* DB
+    for (i = 1; i <= cols(Cw); i++) {
+        ci = Cw[., i]
+        // DL v_i' and dq e_i': columns of beta_i, eta_.i and lambda_i (made
+        // symmetric by T + T'; the rows of these columns are zero in DL, and
+        // those of lambda in dq, so nothing is counted twice)
+        T = J(Pf, Pf, 0)
+        T[., ob + i] = cross(DL, ci)
+        for (d = 1; d <= K; d++) T[., oE + (d - 1) * M + i] = cross(DL, ci :* Z[., d])
+        if (qd) T[., oL + i] = cross(DQ, ci)
+        R  = R + T + T'
+        g1 = g1 + ci :* (be[i] :+ ZE[., i])
+        if (qd) g2 = g2 + la[i] :* ci
+    }
+    if (qd) {
+        T = cross(DL, g2 :* 2 :* ell :/ bc, DB)
+        R = R + cross(DL, g2 :* 2 :/ bc, DL) - T - T' + cross(DB, g2 :* q, DB)
+        g1 = g1 + g2 :* 2 :* ell :/ bc
+    }
+    if (K > 0) {
+        c = oR + 1
+        R[|c, c \ c + K - 1, c + K - 1|] = R[|c, c \ c + K - 1, c + K - 1|] +
+            cross(Z, g1 :/ (m0 :^ 2), Z)
+    }
+    return(D' * R * D)
+}
+
+// the Jacobian H of the summed estimating equations in (theta, vech Sigma),
+// (P + nv) x (P + nv), at the estimate (U, G), and with the correction their
+// derivative Ha in alpha; all analytic:
+//   theta, theta   R - A      (A: Gauss-Newton, R: _eq_rhess)
+//   theta, Sigma   dS = -S E S for the symmetric unit E of (a, b)
+//   Sigma, theta   -sum om (u_b G_a + u_a G_b)
+//   Sigma, Sigma   -sum(om) I
+//   alpha          through Phi and phi of the corrected goods: with
+//                  xb = s'alpha_i, kappa = phi (f - delta xb),
+//                  d u_i / d alpha_i = -kappa s,
+//                  d G_i / d alpha_i = phi s (x) df_i/dtheta (-xb phi s for
+//                  delta_i); df_i/dtheta from the model with Phi = 1, phi = 0
+real matrix _eq_hstack(real rowvector th, real matrix Sig, real matrix W,
+                       real matrix LP, real colvector LX, real matrix Z,
+                       real colvector om, real scalar a0, real scalar qd,
+                       real matrix D, real matrix U,
+                       pointer(real matrix) rowvector G, real matrix Ha,
+                       | real matrix Q, real rowvector cix, real matrix zmask,
+                       real rowvector alpha)
+{
+    real matrix    S, H, E, dS, Uf, Sd, Ga, Hi, US, A, PH, PHI, Cw
+    real colvector xb, ka, ci
+    real scalar    N, L, Pt, P0, nv, n, na, k, a, b, sel, i, j, pos, p, dl, kk
+    pointer(real matrix) rowvector Gf
+    sel = (args() > 13)
+    N = rows(U) ; L = cols(U) ; Pt = cols(th) ; P0 = cols(D)
+    nv = L * (L + 1) / 2 ; n = Pt + nv
+    S  = invsym(Sig)
+    US = (U * S) :* om
+    H  = J(n, n, 0)
+    // theta, theta
+    A = J(Pt, Pt, 0)
+    for (i = 1; i <= L; i++) {
+        Hi = J(N, Pt, 0)
+        for (j = 1; j <= L; j++) Hi = Hi + S[i, j] :* *G[j]
+        A = A + cross(*G[i], om, Hi)
+    }
+    Cw = US
+    if (sel) {
+        _eq_selphi(alpha, LP, LX, Z, Q, cix, zmask, PH, PHI)
+        Cw = US :* PH
+    }
+    H[|1, 1 \ Pt, Pt|] = -A
+    H[|1, 1 \ P0, P0|] = H[|1, 1 \ P0, P0|] + _eq_rhess(th[|1 \ P0|], LP, LX, Z, a0, qd, L + 1, D, Cw)
+    // theta, Sigma and Sigma, theta; Sigma, Sigma
+    k = 0
+    for (b = 1; b <= L; b++) {
+        for (a = b; a <= L; a++) {
+            k++
+            E = J(L, L, 0) ; E[a, b] = 1 ; E[b, a] = 1
+            dS = -S * E * S
+            H[|1, Pt + k \ Pt, Pt + k|] = _eq_psisum(U, G, dS, J(L, L, 0), om)[|1 \ Pt|]'
+            H[|Pt + k, 1 \ Pt + k, Pt|] = -(cross(U[., b], om, *G[a]) + cross(U[., a], om, *G[b]))
+            H[Pt + k, Pt + k] = -sum(om)
+        }
+    }
+    if (!sel) {
+        Ha = J(n, 0, .)
+        return(H)
+    }
+    // alpha
+    na = cols(alpha)
+    Ha = J(n, na, 0)
+    (void) _eq_model(th, W, LP, LX, Z, a0, qd, D, Uf, Gf, 1, J(N, L, 1), J(N, L, 0), cix)
+    pos = 0
+    for (i = 1; i <= L; i++) {
+        if (!cix[i]) continue
+        Sd = _eq_seldesign(LP, LX, Z, Q, zmask[i, .])
+        p  = cols(Sd)
+        xb = Sd * alpha[|pos + 1 \ pos + p|]'
+        dl = th[P0 + cix[i]]
+        // kappa = phi (f - delta xb), f = W - Uf (Phi = 1, phi = 0)
+        ka = PHI[., i] :* ((W[., i] - Uf[., i]) - dl :* xb)
+        Ga = PHI[., i] :* (*Gf[i])
+        Ga[., P0 + cix[i]] = -xb :* PHI[., i]
+        Hi = J(N, Pt, 0)
+        for (j = 1; j <= L; j++) Hi = Hi + S[j, i] :* *G[j]
+        ci = om :* ka
+        Ha[|1, pos + 1 \ Pt, pos + p|] = cross(Ga, US[., i], Sd) - cross(Hi, ci, Sd)
+        kk = 0
+        for (b = 1; b <= L; b++) {
+            for (a = b; a <= L; a++) {
+                kk++
+                if (a == i) Ha[|Pt + kk, pos + 1 \ Pt + kk, pos + p|] =
+                    Ha[|Pt + kk, pos + 1 \ Pt + kk, pos + p|] - cross(U[., b], ci, Sd)
+                if (b == i) Ha[|Pt + kk, pos + 1 \ Pt + kk, pos + p|] =
+                    Ha[|Pt + kk, pos + 1 \ Pt + kk, pos + p|] - cross(U[., a], ci, Sd)
+            }
+        }
+        pos = pos + p
+    }
+    return(H)
+}
+
+// the influence functions of theta, N x P (U and G at the estimate; KD the
+// influence of the imputation of the prices, or N x 0; with the correction,
+// the trailing arguments)
+real matrix _eq_ifexact(real rowvector th, real matrix Sig, real matrix W,
+                        real matrix LP, real colvector LX, real matrix Z,
+                        real colvector om, real scalar a0, real scalar qd,
+                        real matrix D, real matrix U,
+                        pointer(real matrix) rowvector G, real matrix KD,
+                        | real matrix Q, real rowvector cix, real matrix zmask,
+                        real rowvector alpha, real matrix IFA)
+{
+    real matrix H, Ha, PS
+    if (args() > 13) {
+        H  = _eq_hstack(th, Sig, W, LP, LX, Z, om, a0, qd, D, U, G, Ha, Q, cix, zmask, alpha)
+        PS = _eq_psirows(U, G, invsym(Sig), Sig, om) + IFA * Ha'
+    }
+    else {
+        H  = _eq_hstack(th, Sig, W, LP, LX, Z, om, a0, qd, D, U, G, Ha)
+        PS = _eq_psirows(U, G, invsym(Sig), Sig, om)
+    }
+    // pimpute(): the influence of the filled prices (_eq_impcoef)
+    if (cols(KD)) PS = PS + KD
+    return((-PS * luinv(H)')[|1, 1 \ rows(U), cols(th)|])
+}
+
+// ---------------------------------------------------------------------------
+// pimpute(): the influence of the imputation of the prices
+//
+// For good j, a household h' without a price, filled from group g, receives
+// m_gj = sum_{d in D_gj} om_d lp_dj / W_gj: the donors D_gj are the
+// households of the sample with a price in that group, W_gj their weight
+// (as _equaids_pimpute: the first level whose group has donors).  So
+// d m_gj / d w_d = om_d (lp_dj - m_gj) / W_gj =: cw_d, and every quantity
+// summed over the households gains, in the influence function of a donor d,
+//     sum_j  cw_d  sum_{h' filled in g(d) for j}  d t_h' / d lp_h'j ,
+// t_h the contribution of household h (totals held fixed).  Applied to the
+// estimating equations of (theta, Sigma) and of the probits, and to the
+// sample terms of the three types of elasticities.  t_h depends only on
+// household h: d t_h / d lp_hj for every household at once, by moving the
+// whole column j (central differences).  Checked against a brute force
+// (each household's weight moved, the whole procedure, imputation included,
+// re-run): analytic / brute-force standard errors 0.9998 to 1.0000 on 105
+// estimates, instead of 0.996 to 1.004 with the filled prices taken as data.
+// The term sums to zero within each group (deviations from a weighted mean):
+// it cancels under vce(cluster) or vce(svy) at the level of the imputation
+// groups; only prices filled at a wider level count there.
+// The map: GI (N x M, the group of each filled price, 0 otherwise) and DT
+// (one row per donor and group: good, row, group, cw).
+// ---------------------------------------------------------------------------
+// the rows of X summed by key (1..n), n x cols(X)
+real matrix _eq_sumby(real colvector key, real matrix X, real scalar n)
+{
+    real colvector o, ko
+    real matrix    info, R
+    R = J(n, cols(X), 0)
+    if (rows(key) == 0) return(R)
+    o  = order(key, 1)
+    ko = key[o]
+    info = panelsetup(ko, 1)
+    R[ko[info[., 1]], .] = panelsum(X[o, .], info)
+    return(R)
+}
+
+// the map of the imputation (LP0: the log prices before filling; GR: the
+// groups of pimpute(), as integers)
+void _eq_impmap(real matrix LP, real matrix LP0, real matrix GR,
+                real colvector om, real matrix GI, real matrix DT)
+{
+    real colvector isI, isD, key, done, ix, id
+    real rowvector vals
+    real scalar    N, M, j, l, k, v, W1, m1, ng
+    N = rows(LP) ; M = cols(LP)
+    GI = J(N, M, 0) ; DT = J(0, 4, .)
+    ng = 0
+    for (j = 1; j <= M; j++) {
+        isI = (LP0[., j] :>= .)
+        if (!sum(isI)) continue
+        done = J(N, 1, 0)
+        for (l = 1; l <= cols(GR); l++) {
+            key = GR[., l]
+            isD = (LP0[., j] :< .) :& (key :< .)
+            if (!sum(isD)) continue
+            vals = uniqrows(select(key, isD))'
+            for (k = 1; k <= cols(vals); k++) {
+                v  = vals[k]
+                ix = selectindex(isI :& !done :& (key :== v))
+                if (rows(ix) == 0) continue
+                id = selectindex(isD :& (key :== v))
+                W1 = sum(om[id])
+                if (W1 <= 0) continue
+                m1 = sum(om[id] :* LP0[id, j]) / W1
+                ng++
+                GI[ix, j] = J(rows(ix), 1, ng)
+                DT = DT \ (J(rows(id), 1, j), id, J(rows(id), 1, ng),
+                           om[id] :* (LP0[id, j] :- m1) :/ W1)
+                done[ix] = J(rows(ix), 1, 1)
+            }
+        }
+    }
+}
+
+// Dp[j]: N x q derivatives of the contributions in lp_j (NULL: none);
+// returns the N x q influence of the imputation
+real matrix _eq_impapply(pointer(real matrix) rowvector Dp, real scalar N,
+                         real scalar q, real matrix GI, real matrix DT)
+{
+    real matrix    X, SG
+    real colvector key, r
+    real scalar    j
+    if (rows(DT) == 0) return(J(N, q, 0))
+    X = J(0, q, .) ; key = J(0, 1, .)
+    for (j = 1; j <= cols(Dp); j++) {
+        if (Dp[j] == NULL) continue
+        r = selectindex(GI[., j] :> 0)
+        if (rows(r) == 0) continue
+        X   = X \ (*Dp[j])[r, .]
+        key = key \ GI[r, j]
+    }
+    SG = _eq_sumby(key, X, max(GI))
+    return(_eq_sumby(DT[., 2], DT[., 4] :* SG[DT[., 3], .], N))
+}
+
+// the coefficients: KD for (theta, Sigma), and the probits (added to IFA,
+// through their observed Hessian)
+void _eq_impcoef(real rowvector th, real matrix Sig, real matrix W,
+                 real matrix LP, real colvector LX, real matrix Z,
+                 real colvector om, real scalar a0, real scalar qd,
+                 real matrix D, real scalar sel, real matrix Q,
+                 real rowvector cix, real matrix zmask, real rowvector alpha,
+                 real matrix GI, real matrix DT, real matrix KD,
+                 real matrix IFA)
+{
+    real matrix    S, Up, Um, LPp, LPm, PHp, PHIp, PHm, PHIm, Da, Sd, Ii, AD
+    pointer(real matrix) rowvector Gp, Gm, DpS, DpA
+    real colvector xb, q, lam, dlam
+    real scalar    N, M, L, Pt, nv, na, j, h, i, pos, p
+    N = rows(LP) ; M = cols(LP)
+    L = M - 1 ; Pt = cols(th) ; nv = L * (L + 1) / 2
+    S  = invsym(Sig)
+    na = (sel ? cols(alpha) : 0)
+    DpS = J(1, M, NULL) ; DpA = J(1, M, NULL)
+    h = 1e-6
+    for (j = 1; j <= M; j++) {
+        if (!any(GI[., j])) continue
+        LPp = LP ; LPp[., j] = LP[., j] :+ h
+        LPm = LP ; LPm[., j] = LP[., j] :- h
+        if (sel) {
+            _eq_selphi(alpha, LPp, LX, Z, Q, cix, zmask, PHp, PHIp)
+            _eq_selphi(alpha, LPm, LX, Z, Q, cix, zmask, PHm, PHIm)
+            (void) _eq_model(th, W, LPp, LX, Z, a0, qd, D, Up, Gp, 1, PHp, PHIp, cix)
+            (void) _eq_model(th, W, LPm, LX, Z, a0, qd, D, Um, Gm, 1, PHm, PHIm, cix)
+        }
+        else {
+            (void) _eq_model(th, W, LPp, LX, Z, a0, qd, D, Up, Gp, 1)
+            (void) _eq_model(th, W, LPm, LX, Z, a0, qd, D, Um, Gm, 1)
+        }
+        DpS[j] = &((_eq_psirows(Up, Gp, S, Sig, om) - _eq_psirows(Um, Gm, S, Sig, om)) :/ (2 * h))
+        // the probit scores om lambda s, s = (1, lp - lx, z, q): lp_j is
+        // column 1 + j; d lambda / d xb = -lambda (lambda + xb)
+        if (sel) {
+            Da  = J(N, na, 0)
+            pos = 0
+            for (i = 1; i <= L; i++) {
+                if (!cix[i]) continue
+                Sd   = _eq_seldesign(LP, LX, Z, Q, zmask[i, .])
+                p    = cols(Sd)
+                xb   = Sd * alpha[|pos + 1 \ pos + p|]'
+                q    = 2 :* (W[., i] :> 0) :- 1
+                lam  = q :* normalden(q :* xb) :/ normal(q :* xb)
+                dlam = -lam :* (lam + xb)
+                Da[|1, pos + 1 \ N, pos + p|] = (om :* dlam :* alpha[pos + 1 + j]) :* Sd
+                Da[., pos + 1 + j] = Da[., pos + 1 + j] + om :* lam
+                pos = pos + p
+            }
+            DpA[j] = &(Da :* 1)
+        }
+    }
+    KD = _eq_impapply(DpS, N, Pt + nv, GI, DT)
+    if (!sel) return
+    AD = _eq_impapply(DpA, N, na, GI, DT)
+    pos = 0
+    for (i = 1; i <= L; i++) {
+        if (!cix[i]) continue
+        Sd  = _eq_seldesign(LP, LX, Z, Q, zmask[i, .])
+        p   = cols(Sd)
+        xb  = Sd * alpha[|pos + 1 \ pos + p|]'
+        q   = 2 :* (W[., i] :> 0) :- 1
+        lam = q :* normalden(q :* xb) :/ normal(q :* xb)
+        Ii  = invsym(quadcross(Sd, om :* (lam :* (lam + xb)), Sd))
+        IFA[|1, pos + 1 \ N, pos + p|] = IFA[|1, pos + 1 \ N, pos + p|] +
+            AD[|1, pos + 1 \ N, pos + p|] * Ii
+        pos = pos + p
+    }
+}
+
+// market elasticities: the contribution of each household to the sample
+// terms (x, u, c stacked), the totals held at S0, K0, K1, K2
+void _eq_impsconst(real matrix EW, real matrix DX, real matrix DP,
+                   real colvector wx, real scalar M, real rowvector S0,
+                   real rowvector K0, real rowvector K1, real rowvector K2)
+{
+    real scalar i, j, c
+    S0 = colsum(wx :* EW)
+    K0 = colsum(wx :* DX) :/ S0
+    K1 = J(1, M * M, .) ; K2 = J(1, M * M, .)
+    for (i = 1; i <= M; i++) {
+        for (j = 1; j <= M; j++) {
+            c = (i - 1) * M + j
+            K1[c] = sum(wx :* DP[., c]) / S0[i]
+            K2[c] = sum(wx :* (EW[., i] + DX[., i]) :* EW[., j]) / S0[i]
+        }
+    }
+}
+real matrix _eq_impsamp(real matrix EW, real matrix DX, real matrix DP,
+                        real colvector wx, real rowvector S0, real rowvector K0,
+                        real rowvector K1, real rowvector K2, real scalar M)
+{
+    real matrix O
+    real scalar i, j, c
+    O = J(rows(EW), M + 2 * M * M, .)
+    for (i = 1; i <= M; i++) {
+        O[., i] = wx :* (DX[., i] - K0[i] :* EW[., i]) :/ S0[i]
+        for (j = 1; j <= M; j++) {
+            c = (i - 1) * M + j
+            O[., M + c] = wx :* (DP[., c] - K1[c] :* EW[., i]) :/ S0[i]
+            O[., M + M * M + c] = O[., M + c] +
+                wx :* ((EW[., i] + DX[., i]) :* EW[., j] - K2[c] :* EW[., i]) :/ S0[i]
+        }
+    }
+    return(O)
+}
+
+// without the correction for the non-buyers: ratios of totals weighted by wx
+// (market omega x, households omega), added to IFx, IFu, IFc
+void _eq_impelas_np(real rowvector th, real matrix LP, real colvector LX,
+                    real matrix Z, real colvector wx, real scalar a0,
+                    real scalar qd, real scalar M, real matrix GI,
+                    real matrix DT, real matrix IFx, real matrix IFu,
+                    real matrix IFc)
+{
+    real matrix    F, MU, MUJ, Fp, MUp, MUJp, Fm, MUm, MUJm, LPp, LPm, ED
+    real rowvector S0, K0, K1, K2
+    real scalar    j, h, N, q
+    pointer(real matrix) rowvector Dp
+    N = rows(LP) ; q = M + 2 * M * M
+    _eq_parts(th, LP, LX, Z, a0, qd, M, F, MU, MUJ)
+    _eq_impsconst(F, MU, MUJ, wx, M, S0, K0, K1, K2)
+    Dp = J(1, M, NULL)
+    h = 1e-6
+    for (j = 1; j <= M; j++) {
+        if (!any(GI[., j])) continue
+        LPp = LP ; LPp[., j] = LP[., j] :+ h
+        LPm = LP ; LPm[., j] = LP[., j] :- h
+        _eq_parts(th, LPp, LX, Z, a0, qd, M, Fp, MUp, MUJp)
+        _eq_parts(th, LPm, LX, Z, a0, qd, M, Fm, MUm, MUJm)
+        Dp[j] = &((_eq_impsamp(Fp, MUp, MUJp, wx, S0, K0, K1, K2, M) -
+                   _eq_impsamp(Fm, MUm, MUJm, wx, S0, K0, K1, K2, M)) :/ (2 * h))
+    }
+    ED  = _eq_impapply(Dp, N, q, GI, DT)
+    IFx = IFx + ED[|1, 1 \ N, M|]
+    IFu = IFu + ED[|1, M + 1 \ N, M + M * M|]
+    IFc = IFc + ED[|1, M + M * M + 1 \ N, q|]
+}
+
+// at the means (both paths): E(theta, m), m the weighted means, lp_j their
+// column j: d E / d lp_hj = J_m[., j] om_h / sum om
+real matrix _eq_impmeans(real colvector om, real scalar sw, real matrix Jm,
+                         real scalar M, real matrix GI, real matrix DT)
+{
+    pointer(real matrix) rowvector Dp
+    real scalar j
+    Dp = J(1, M, NULL)
+    for (j = 1; j <= M; j++) Dp[j] = &((om :/ sw) * Jm[., j]')
+    return(_eq_impapply(Dp, rows(om), rows(Jm), GI, DT))
+}
+
+// household mean, without the correction for the non-buyers
+real matrix _eq_imphh_np(real rowvector th, real matrix LP, real colvector LX,
+                         real matrix Z, real colvector om, real scalar a0,
+                         real scalar qd, real scalar M, real scalar sw,
+                         real matrix GI, real matrix DT)
+{
+    real matrix    LPp, LPm
+    real scalar    j, h
+    pointer(real matrix) rowvector Dp
+    Dp = J(1, M, NULL)
+    h = 1e-6
+    for (j = 1; j <= M; j++) {
+        if (!any(GI[., j])) continue
+        LPp = LP ; LPp[., j] = LP[., j] :+ h
+        LPm = LP ; LPm[., j] = LP[., j] :- h
+        Dp[j] = &(om :* (_eq_elas_hh(th, LPp, LX, Z, a0, qd, M) -
+                         _eq_elas_hh(th, LPm, LX, Z, a0, qd, M)) :/ (2 * h * sw))
+    }
+    return(_eq_impapply(Dp, rows(LP), M + 2 * M * M, GI, DT))
+}
+
+// with the correction for the non-buyers: ratios of totals weighted by wx
+// (EDm: market omega x, households omega) and household mean (EDh), on the
+// expected shares
+void _eq_impelas_sel(real rowvector psi, real matrix LP, real colvector LX,
+                     real matrix Z, real matrix Q, real colvector om,
+                     real colvector wx, real scalar a0, real scalar qd, real scalar M,
+                     real scalar P, real rowvector cix, real matrix zmask,
+                     real matrix GI, real matrix DT, real matrix EDm,
+                     real matrix EDh)
+{
+    real matrix    EW, DX, DP, EWp, DXp, DPp, EWm, DXm, DPm, LPp, LPm
+    real rowvector S0, K0, K1, K2
+    real scalar    j, h, N, q, sw
+    pointer(real matrix) rowvector Dm, Dh
+    N = rows(LP) ; q = M + 2 * M * M ; sw = sum(om)
+    _eq_selparts(psi, LP, LX, Z, Q, a0, qd, M, P, cix, zmask, EW, DX, DP)
+    _eq_impsconst(EW, DX, DP, wx, M, S0, K0, K1, K2)
+    Dm = J(1, M, NULL) ; Dh = J(1, M, NULL)
+    h = 1e-6
+    for (j = 1; j <= M; j++) {
+        if (!any(GI[., j])) continue
+        LPp = LP ; LPp[., j] = LP[., j] :+ h
+        LPm = LP ; LPm[., j] = LP[., j] :- h
+        _eq_selparts(psi, LPp, LX, Z, Q, a0, qd, M, P, cix, zmask, EWp, DXp, DPp)
+        _eq_selparts(psi, LPm, LX, Z, Q, a0, qd, M, P, cix, zmask, EWm, DXm, DPm)
+        Dm[j] = &((_eq_impsamp(EWp, DXp, DPp, wx, S0, K0, K1, K2, M) -
+                   _eq_impsamp(EWm, DXm, DPm, wx, S0, K0, K1, K2, M)) :/ (2 * h))
+        Dh[j] = &(om :* (_eq_selstack_hh(EWp, DXp, DPp, M) -
+                         _eq_selstack_hh(EWm, DXm, DPm, M)) :/ (2 * h * sw))
+    }
+    EDm = _eq_impapply(Dm, N, q, GI, DT)
+    EDh = _eq_impapply(Dh, N, q, GI, DT)
+}
+
+// ---------------------------------------------------------------------------
 // standard errors of the aggregate elasticities, analytic
 //
 // Each aggregate elasticity is a ratio of weighted totals, E = T/S, of
@@ -1853,13 +2496,15 @@ void _eq_elasvar(real rowvector th, real matrix LP, real colvector LX,
                  real matrix Z, real colvector om, real scalar a0,
                  real scalar qd, real scalar M, real matrix D, real matrix U,
                  pointer(real matrix) rowvector G, real matrix S,
-                 real matrix A, string scalar base, real scalar doe,
-                 real matrix DS, real scalar vmode, string scalar single)
+                 real matrix IF0, string scalar base, real scalar doe,
+                 real matrix DS, real scalar vmode, string scalar single,
+                 real matrix GI, real matrix DT)
 {
-    real scalar    N, K, P, Pf, nv, ob, oG, oL, oE, oR, i, j, k, d, c
+    real scalar    N, K, P, Pf, nv, ob, oG, oL, oE, oR, i, j, k, d, c, wk
+    string scalar  sf
     real rowvector al, be, la, rh, f, Sg, Ex, sT, sS, sC, sE
-    real matrix    Ga, et, ZE, B, PI, F, MU, MUJ, DL, DB, IFt, GG, Ai,
-                   IFx, IFu, IFc, Jx, Ju, Jc, US
+    real matrix    Ga, et, ZE, B, PI, F, MU, MUJ, DL, DB, IFt, GG,
+                   IFx, IFu, IFc, Jx, Ju, Jc
     real colvector lna, lnc, m0, bc, ell, q, wx, v, Ex_i
     pointer(real matrix) rowvector GF
 
@@ -1907,71 +2552,76 @@ void _eq_elasvar(real rowvector th, real matrix LP, real colvector LX,
     GG = J(N, P, 0)
     for (i = 1; i < M; i++) GG = GG - *G[i]
     GF[M] = &GG
-    // influence functions of theta (N x P)
-    Ai = invsym(A)
-    US = U * S
-    IFt = J(N, P, 0)
-    for (i = 1; i < M; i++) IFt = IFt + (*G[i]) :* (om :* US[., i])
-    IFt = IFt * Ai
+    // influence functions of theta (N x P): the exact derivative of the
+    // procedure, from _eq_ifexact
+    IFt = IF0
     st_matrix(base + "Vt", _eq_vagg(IFt, DS, vmode, single))
     // saveif(stub), for the tests only: the influence functions as variables
     _eq_saveif(IFt, "t")
     // noelastse: the robust variance of the coefficients only
-    if (!doe) return
-    // weights and totals
-    wx = om :* exp(LX)
-    Sg = colsum(wx :* F)
-    Ex = 1 :+ colsum(wx :* MU) :/ Sg
-    IFx = J(N, M, .) ; Jx = J(M, P, .)
-    IFu = J(N, M * M, .) ; Ju = J(M * M, P, .)
-    IFc = J(N, M * M, .) ; Jc = J(M * M, P, .)
-    for (i = 1; i < M + 1; i++) {
-        sS = wx' * (*GF[i])                                   // dS_i (free)
-        // d T_i, full space: weighted sums of d mu_i
-        sT = _eq_dmu(wx, i, la, ell, bc, Z, DL, DB, M, ob, oL, oE, qd) * D
-        Jx[i, .] = (sT - (Ex[i] - 1) :* sS) :/ Sg[i]
-        IFx[., i] = wx :* (MU[., i] - (Ex[i] - 1) :* F[., i]) :/ Sg[i] + IFt * Jx[i, .]'
-        for (j = 1; j <= M; j++) {
-            c = (i - 1) * M + j
-            // T_ij = sum wx mu_ij, full-space derivative
-            sT = J(1, Pf, 0)
-            sT[oG + _eq_vidx(i, j, M)] = sum(wx)
-            sT = sT - _eq_dmu(wx :* PI[., j], i, la, ell, bc, Z, DL, DB, M, ob, oL, oE, qd)
-            v = wx :* MU[., i]                                // - mu_i d pi_j
-            sT[j] = sT[j] - sum(v)
-            for (k = 1; k <= M; k++) sT[oG + _eq_vidx(j, k, M)] = sT[oG + _eq_vidx(j, k, M)] - sum(v :* LP[., k])
-            if (qd) {
-                sT[oL + i] = sT[oL + i] - sum(wx :* B[., j] :* q)
-                v = la[i] :* wx :* q                          // - lambda_i q d B_j
-                sT[ob + j] = sT[ob + j] - sum(v)
-                for (d = 1; d <= K; d++) sT[oE + (d - 1) * M + j] = sT[oE + (d - 1) * M + j] - sum(v :* Z[., d])
-                v = la[i] :* wx :* B[., j]                    // - lambda_i B_j d q
-                sT = sT - ((v :* (2 :* ell :/ bc))' * DL - (v :* q)' * DB)
+    if (doe <= 0) return
+    // market (weight omega x) and households or individuals (weight omega):
+    // the same ratios of weighted totals, the same influence functions
+    for (wk = 1; wk <= 2; wk++) {
+        sf = (wk == 1 ? "" : "w")
+        wx = (wk == 1 ? om :* exp(LX) : om)
+        Sg = colsum(wx :* F)
+        Ex = 1 :+ colsum(wx :* MU) :/ Sg
+        IFx = J(N, M, .) ; Jx = J(M, P, .)
+        IFu = J(N, M * M, .) ; Ju = J(M * M, P, .)
+        IFc = J(N, M * M, .) ; Jc = J(M * M, P, .)
+        for (i = 1; i < M + 1; i++) {
+            sS = wx' * (*GF[i])                                   // dS_i (free)
+            // d T_i, full space: weighted sums of d mu_i
+            sT = _eq_dmu(wx, i, la, ell, bc, Z, DL, DB, M, ob, oL, oE, qd) * D
+            Jx[i, .] = (sT - (Ex[i] - 1) :* sS) :/ Sg[i]
+            IFx[., i] = wx :* (MU[., i] - (Ex[i] - 1) :* F[., i]) :/ Sg[i] + IFt * Jx[i, .]'
+            for (j = 1; j <= M; j++) {
+                c = (i - 1) * M + j
+                // T_ij = sum wx mu_ij, full-space derivative
+                sT = J(1, Pf, 0)
+                sT[oG + _eq_vidx(i, j, M)] = sum(wx)
+                sT = sT - _eq_dmu(wx :* PI[., j], i, la, ell, bc, Z, DL, DB, M, ob, oL, oE, qd)
+                v = wx :* MU[., i]                                // - mu_i d pi_j
+                sT[j] = sT[j] - sum(v)
+                for (k = 1; k <= M; k++) sT[oG + _eq_vidx(j, k, M)] = sT[oG + _eq_vidx(j, k, M)] - sum(v :* LP[., k])
+                if (qd) {
+                    sT[oL + i] = sT[oL + i] - sum(wx :* B[., j] :* q)
+                    v = la[i] :* wx :* q                          // - lambda_i q d B_j
+                    sT[ob + j] = sT[ob + j] - sum(v)
+                    for (d = 1; d <= K; d++) sT[oE + (d - 1) * M + j] = sT[oE + (d - 1) * M + j] - sum(v :* Z[., d])
+                    v = la[i] :* wx :* B[., j]                    // - lambda_i B_j d q
+                    sT = sT - ((v :* (2 :* ell :/ bc))' * DL - (v :* q)' * DB)
+                }
+                sT = sT * D
+                MUJ = (Ga[i, j] :- (MU[., i] :* PI[., j])) - (la[i] :* (B[., j] :* q))
+                Ju[c, .] = (sT - ((sum(wx :* MUJ) / Sg[i]) :* sS)) :/ Sg[i]
+                IFu[., c] = wx :* (MUJ - (sum(wx :* MUJ) / Sg[i]) :* F[., i]) :/ Sg[i] + IFt * Ju[c, .]'
+                // compensated: E*_ij = E_ij + C_ij/S_i, C_ij = sum wx (f_i + mu_i) f_j
+                sC = (wx :* F[., j])' * (*GF[i]) +
+                     _eq_dmu(wx :* F[., j], i, la, ell, bc, Z, DL, DB, M, ob, oL, oE, qd) * D +
+                     (wx :* (F[., i] + MU[., i]))' * (*GF[j])
+                v = wx :* (F[., i] + MU[., i]) :* F[., j]
+                Jc[c, .] = Ju[c, .] + (sC - ((sum(v) / Sg[i]) :* sS)) :/ Sg[i]
+                IFc[., c] = IFu[., c] + (v - (sum(v) / Sg[i]) :* wx :* F[., i]) :/ Sg[i] +
+                            IFt * ((sC - ((sum(v) / Sg[i]) :* sS)) :/ Sg[i])'
             }
-            sT = sT * D
-            MUJ = (Ga[i, j] :- (MU[., i] :* PI[., j])) - (la[i] :* (B[., j] :* q))
-            Ju[c, .] = (sT - ((sum(wx :* MUJ) / Sg[i]) :* sS)) :/ Sg[i]
-            IFu[., c] = wx :* (MUJ - (sum(wx :* MUJ) / Sg[i]) :* F[., i]) :/ Sg[i] + IFt * Ju[c, .]'
-            // compensated: E*_ij = E_ij + C_ij/S_i, C_ij = sum wx (f_i + mu_i) f_j
-            sC = (wx :* F[., j])' * (*GF[i]) +
-                 _eq_dmu(wx :* F[., j], i, la, ell, bc, Z, DL, DB, M, ob, oL, oE, qd) * D +
-                 (wx :* (F[., i] + MU[., i]))' * (*GF[j])
-            v = wx :* (F[., i] + MU[., i]) :* F[., j]
-            Jc[c, .] = Ju[c, .] + (sC - ((sum(v) / Sg[i]) :* sS)) :/ Sg[i]
-            IFc[., c] = IFu[., c] + (v - (sum(v) / Sg[i]) :* wx :* F[., i]) :/ Sg[i] +
-                        IFt * ((sC - ((sum(v) / Sg[i]) :* sS)) :/ Sg[i])'
         }
+        // pimpute(): the direct influence of the filled prices
+        if (rows(DT)) _eq_impelas_np(th, LP, LX, Z, wx, a0, qd, M, GI, DT, IFx, IFu, IFc)
+        if (wk == 1) {
+            _eq_saveif(IFx, "x")
+            _eq_saveif(IFu, "u")
+            st_matrix(base + "Jx", Jx)
+            st_matrix(base + "Ju", Ju)
+            st_matrix(base + "Jc", Jc)
+        }
+        st_matrix(base + "Vx" + sf, _eq_vagg(IFx, DS, vmode, single))
+        st_matrix(base + "Vu" + sf, _eq_vagg(IFu, DS, vmode, single))
+        st_matrix(base + "Vc" + sf, _eq_vagg(IFc, DS, vmode, single))
     }
-    _eq_saveif(IFx, "x")
-    _eq_saveif(IFu, "u")
-    st_matrix(base + "Vx", _eq_vagg(IFx, DS, vmode, single))
-    st_matrix(base + "Vu", _eq_vagg(IFu, DS, vmode, single))
-    st_matrix(base + "Vc", _eq_vagg(IFc, DS, vmode, single))
-    st_matrix(base + "Jx", Jx)
-    st_matrix(base + "Ju", Ju)
-    st_matrix(base + "Jc", Jc)
     // at the means (households, individuals) and the household mean
-    _eq_elasvar_mh(th, LP, LX, Z, om, a0, qd, M, IFt, DS, vmode, single, base)
+    _eq_elasvar_mh(th, LP, LX, Z, om, a0, qd, M, IFt, DS, vmode, single, base, GI, DT)
 }
 
 // ---------------------------------------------------------------------------
@@ -2030,7 +2680,7 @@ void _eq_elasvar_mh(real rowvector th, real matrix LP, real colvector LX,
                     real matrix Z, real colvector om, real scalar a0,
                     real scalar qd, real scalar M, real matrix IFt,
                     real matrix DS, real scalar vmode, string scalar single,
-                    string scalar base)
+                    string scalar base, real matrix GI, real matrix DT)
 {
     real scalar    N, K, P, q, k, h, sw, nm
     real rowvector m, mp, mm, tp, tm, E0
@@ -2058,6 +2708,7 @@ void _eq_elasvar_mh(real rowvector th, real matrix LP, real colvector LX,
                      _eq_elas_at(th, mm[1..M], mm[M+1], (K ? mm[M+2..nm] : J(1, 0, .)), a0, qd, M)) :/ (2 * h))'
     }
     IF = IFt * Jt' + ((om :* (MV :- m)) :/ sw) * Jm'
+    if (rows(DT)) IF = IF + _eq_impmeans(om, sw, Jm, M, GI, DT)
     V  = _eq_vagg(IF, DS, vmode, single)
     st_matrix(base + "Vxm", V[1..M, 1..M])
     st_matrix(base + "Vum", V[M+1..M+M*M, M+1..M+M*M])
@@ -2074,6 +2725,7 @@ void _eq_elasvar_mh(real rowvector th, real matrix LP, real colvector LX,
                      colsum(om :* _eq_elas_hh(tm, LP, LX, Z, a0, qd, M))) :/ (2 * h * sw))'
     }
     IF = (om :* (H :- E0)) :/ sw + IFt * Jt'
+    if (rows(DT)) IF = IF + _eq_imphh_np(th, LP, LX, Z, om, a0, qd, M, sw, GI, DT)
     V  = _eq_vagg(IF, DS, vmode, single)
     st_matrix(base + "Vxh", V[1..M, 1..M])
     st_matrix(base + "Vuh", V[M+1..M+M*M, M+1..M+M*M])
@@ -2399,13 +3051,19 @@ real colvector _eq_probit(real colvector dd, real matrix S, real colvector w,
         if (max(abs(step)) < 1e-11) break
     }
     xb = S * g
-    P  = rowmin((rowmax((normal(xb), J(n, 1, 1e-15))), J(n, 1, 1 - 1e-15)))
     f  = normalden(xb)
-    r  = (dd - P) :* f :/ (P :* (1 :- P))
-    a  = (f :^ 2) :/ (P :* (1 :- P))
-    Ii = invsym(quadcross(S, w :* a, S))
     Ph = normal(xb)
     ph = f
+    // The influence function of the estimator uses the OBSERVED Hessian,
+    // sum w lambda (lambda + xb) s s' with lambda = q phi(q xb)/Phi(q xb),
+    // q = 2d - 1: the derivative of the score the estimator actually solves.
+    // The expected (Fisher) information of the scoring steps equals it only
+    // in expectation; a brute-force influence function (each household's
+    // weight moved, the whole procedure re-run) measured the difference at up
+    // to 2% of the standard errors of the probit coefficients (N = 1000).
+    a  = 2 :* dd :- 1
+    r  = a :* normalden(a :* xb) :/ normal(a :* xb)
+    Ii = invsym(quadcross(S, w :* (r :* (r :+ xb)), S))
     IF = ((w :* r) :* S) * Ii
     return(g)
 }
@@ -2509,8 +3167,9 @@ real matrix _eq_selstack_hh(real matrix EW, real matrix DX, real matrix DP,
     return(H)
 }
 
-// the three summaries at psi: market (row 1), at the means (row 2) and the
-// household mean (row 3), each 1 x (M + 2 M^2)
+// the four summaries at psi: market (row 1), the reference household at the
+// means (row 2), the household mean (row 3) and households (row 4: weight
+// omega, individuals when omega includes hhsize()), each 1 x (M + 2 M^2)
 real matrix _eq_selsum(real rowvector psi, real matrix LP, real colvector LX,
                        real matrix Z, real matrix Q, real colvector om,
                        real scalar a0, real scalar qd, real scalar M,
@@ -2519,17 +3178,18 @@ real matrix _eq_selsum(real rowvector psi, real matrix LP, real colvector LX,
 {
     real matrix    EW, DX, DP, EWm, DXm, DPm
     real scalar    K, nq, sw
-    real rowvector out1, out2, out3
+    real rowvector out1, out2, out3, out4
     K = cols(Z) ; nq = cols(Q) ; sw = sum(om)
     _eq_selparts(psi, LP, LX, Z, Q, a0, qd, M, P, cix, zmask, EW, DX, DP)
     out1 = _eq_selstack_mkt(EW, DX, DP, om :* exp(LX), M)
+    out4 = _eq_selstack_mkt(EW, DX, DP, om, M)
     out3 = colsum(om :* _eq_selstack_hh(EW, DX, DP, M)) :/ sw
     _eq_selparts(psi, m[|1 \ M|], m[M + 1],
                  (K ? m[|M + 2 \ M + 1 + K|] : J(1, 0, .)),
                  (nq ? m[|M + 2 + K \ M + 1 + K + nq|] : J(1, 0, .)),
                  a0, qd, M, P, cix, zmask, EWm, DXm, DPm)
     out2 = _eq_selstack_hh(EWm, DXm, DPm, M)
-    return((out1 \ out2 \ out3))
+    return((out1 \ out2 \ out3 \ out4))
 }
 
 // estimation of the probits, before the system
@@ -2583,48 +3243,32 @@ void _eq_selprobits(real matrix W, real matrix LP, real colvector LX,
     st_matrix(alphan, AL)
 }
 
-// after the system: the influence functions of theta with the estimation of
-// the probits, the variances of delta, the elasticities of the four types on
-// the expected shares and their variances (derivatives with respect to all
-// the parameters by central differences), the identification of delta
+// after the system: the variances of delta (from the influence functions of
+// theta, _eq_ifexact, which carry the estimation of the probits), the
+// elasticities of the four types on the expected shares and their variances
+// (derivatives with respect to all the parameters by central differences),
+// the identification of delta
 void _eq_selpost(real rowvector th, real matrix W, real matrix LP,
                  real colvector LX, real matrix Z, real matrix Q,
                  real colvector om, real scalar a0, real scalar qd,
                  real scalar M, real scalar P, real matrix D, real matrix U,
                  pointer(real matrix) rowvector G, real matrix S,
-                 real matrix A, real matrix PH, real matrix PHI,
+                 real matrix IF0, real matrix PH, real matrix PHI,
                  real rowvector cix, real matrix zmask, real rowvector alpha,
                  real matrix IFA, string scalar base, real scalar doe,
                  real matrix DS, real scalar vmode, string scalar single,
-                 string scalar diagn)
+                 string scalar diagn, real matrix GI, real matrix DT)
 {
-    real matrix    Ai, US, IFt, H, Sd, F, MU, MUJ, Cj, IFp, JJ, Jm, IFs, MV,
-                   EW, DX, DP, V, Hh, Gi, DG, Gx, EWm, DXm, DPm
-    real rowvector psi, pp, pm, m, mp, mm, E0, dl, sdl, S0
-    real colvector wx, fsel, xb, rr
-    real scalar    N, C, Pt, q, i, j, k, h, pos, p, nm, sw, R2, K, nq, c, r
+    real matrix    IFt, IFp, JJ, Jm, IFs, MV,
+                   EW, DX, DP, V, Hh, Gi, DG, Gx, EWm, DXm, DPm, EDm, EDh, IFm
+    real rowvector psi, pp, pm, m, mp, mm, E0, dl, sdl, S0, S1
+    real colvector wx, rr
+    real scalar    N, C, Pt, q, i, j, k, h, nm, sw, R2, K, nq, c, r, wk, er
+    string scalar  sf
     N = rows(W) ; C = sum(cix :> 0) ; Pt = cols(th) ; q = M + 2 * M * M
     K = cols(Z) ; nq = cols(Q) ; sw = sum(om)
-    // influence functions of theta, with the probits: IF = A^-1 (s - C IF_alpha)
-    Ai  = invsym(A)
-    US  = U * S
-    IFt = J(N, Pt, 0)
-    for (i = 1; i < M; i++) IFt = IFt + (*G[i]) :* (om :* US[., i])
-    _eq_parts(th[|1 \ P|], LP, LX, Z, a0, qd, M, F, MU, MUJ)
-    pos = 0
-    for (j = 1; j < M; j++) {
-        if (!cix[j]) continue
-        Sd = _eq_seldesign(LP, LX, Z, Q, zmask[j, .])
-        p  = cols(Sd)
-        H  = J(N, Pt, 0)
-        for (i = 1; i < M; i++) H = H + S[i, j] :* *G[i]
-        xb = Sd * alpha[|pos + 1 \ pos + p|]'
-        fsel = PHI[., j] :* (F[., j] - th[P + cix[j]] :* xb)
-        Cj = cross(H, om, fsel :* Sd)
-        IFt = IFt - IFA[|1, pos + 1 \ N, pos + p|] * Cj'
-        pos = pos + p
-    }
-    IFt = IFt * Ai
+    // influence functions of theta, with the estimation of the probits
+    IFt = IF0
     st_matrix(base + "Vt", _eq_vagg(IFt, DS, vmode, single))
     _eq_saveif(IFt, "t")
     // delta and its standard error
@@ -2678,6 +3322,9 @@ void _eq_selpost(real rowvector th, real matrix W, real matrix LP,
     st_matrix(base + "xh", E0[3, 1..M])
     st_matrix(base + "uh", rowshape(E0[3, M+1..M+M*M], M))
     st_matrix(base + "ch", rowshape(E0[3, M+M*M+1..q], M))
+    st_matrix(base + "xw", E0[4, 1..M])
+    st_matrix(base + "uw", rowshape(E0[4, M+1..M+M*M], M))
+    st_matrix(base + "cw", rowshape(E0[4, M+M*M+1..q], M))
     _eq_selparts(psi, m[|1 \ M|], m[M + 1], (K ? m[|M + 2 \ M + 1 + K|] : J(1, 0, .)),
                  (nq ? m[|M + 2 + K \ nm|] : J(1, 0, .)), a0, qd, M, P, cix, zmask, EWm, DXm, DPm)
     st_matrix(base + "Sm", EWm)
@@ -2685,9 +3332,9 @@ void _eq_selpost(real rowvector th, real matrix W, real matrix LP,
     IFp = IFt, IFA
     st_matrix(base + "psi", psi)
     st_matrix(base + "Vpsi", _eq_vagg(IFp, DS, vmode, single))
-    if (!doe) return
-    // derivatives of the three summaries with respect to psi and to the means
-    JJ = J(3 * q, cols(psi), .)
+    if (doe <= 0) return
+    // derivatives of the four summaries with respect to psi and to the means
+    JJ = J(4 * q, cols(psi), .)
     for (k = 1; k <= cols(psi); k++) {
         h = 1e-5 * max((1, abs(psi[k])))
         pp = psi ; pp[k] = psi[k] + h
@@ -2703,36 +3350,54 @@ void _eq_selpost(real rowvector th, real matrix W, real matrix LP,
         Jm[., k] = ((_eq_selsum(psi, LP, LX, Z, Q, om, a0, qd, M, P, cix, zmask, mp)[2, .] -
                      _eq_selsum(psi, LP, LX, Z, Q, om, a0, qd, M, P, cix, zmask, mm)[2, .]) :/ (2 * h))'
     }
-    // market: sampling term of the ratios of totals
-    IFs = J(N, q, .)
-    for (i = 1; i <= M; i++) {
-        IFs[., i] = wx :* (DX[., i] - (E0[1, i] - 1) :* EW[., i]) :/ S0[i]
-        for (j = 1; j <= M; j++) {
-            c = (i - 1) * M + j
-            IFs[., M + c] = wx :* (DP[., c] - (E0[1, M + c] + (i == j)) :* EW[., i]) :/ S0[i]
-            r = sum(wx :* (EW[., i] + DX[., i]) :* EW[., j]) / S0[i]
-            IFs[., M + M * M + c] = IFs[., M + c] +
-                wx :* ((EW[., i] + DX[., i]) :* EW[., j] - r :* EW[., i]) :/ S0[i]
+    // market (weight omega x, row 1) and households (omega, row 4): the
+    // sampling term of the ratios of totals, then the estimation of psi
+    for (wk = 1; wk <= 2; wk++) {
+        sf = (wk == 1 ? "" : "w")
+        er = (wk == 1 ? 1 : 4)
+        wx = (wk == 1 ? om :* exp(LX) : om)
+        S1 = colsum(wx :* EW)
+        IFs = J(N, q, .)
+        for (i = 1; i <= M; i++) {
+            IFs[., i] = wx :* (DX[., i] - (E0[er, i] - 1) :* EW[., i]) :/ S1[i]
+            for (j = 1; j <= M; j++) {
+                c = (i - 1) * M + j
+                IFs[., M + c] = wx :* (DP[., c] - (E0[er, M + c] + (i == j)) :* EW[., i]) :/ S1[i]
+                r = sum(wx :* (EW[., i] + DX[., i]) :* EW[., j]) / S1[i]
+                IFs[., M + M * M + c] = IFs[., M + c] +
+                    wx :* ((EW[., i] + DX[., i]) :* EW[., j] - r :* EW[., i]) :/ S1[i]
+            }
         }
+        IFs = IFs + IFp * JJ[(er - 1) * q + 1..er * q, .]'
+        // pimpute(): the direct influence of the filled prices
+        if (rows(DT)) {
+            _eq_impelas_sel(psi, LP, LX, Z, Q, om, wx, a0, qd, M, P, cix, zmask, GI, DT, EDm, EDh)
+            IFs = IFs + EDm
+        }
+        V = _eq_vagg(IFs, DS, vmode, single)
+        if (wk == 1) {
+            _eq_saveif(IFs[., 1..M], "x")
+            _eq_saveif(IFs[., M+1..M+M*M], "u")
+            st_matrix(base + "Jx", JJ[1..M, 1..P])
+            st_matrix(base + "Ju", JJ[M+1..M+M*M, 1..P])
+            st_matrix(base + "Jc", JJ[M+M*M+1..q, 1..P])
+        }
+        st_matrix(base + "Vx" + sf, V[1..M, 1..M])
+        st_matrix(base + "Vu" + sf, V[M+1..M+M*M, M+1..M+M*M])
+        st_matrix(base + "Vc" + sf, V[M+M*M+1..q, M+M*M+1..q])
     }
-    IFs = IFs + IFp * JJ[1..q, .]'
-    V = _eq_vagg(IFs, DS, vmode, single)
-    _eq_saveif(IFs[., 1..M], "x")
-    _eq_saveif(IFs[., M+1..M+M*M], "u")
-    st_matrix(base + "Vx", V[1..M, 1..M])
-    st_matrix(base + "Vu", V[M+1..M+M*M, M+1..M+M*M])
-    st_matrix(base + "Vc", V[M+M*M+1..q, M+M*M+1..q])
-    st_matrix(base + "Jx", JJ[1..M, 1..P])
-    st_matrix(base + "Ju", JJ[M+1..M+M*M, 1..P])
-    st_matrix(base + "Jc", JJ[M+M*M+1..q, 1..P])
     // at the means
-    V = _eq_vagg(IFp * JJ[q+1..2*q, .]' + ((om :* (MV :- m)) :/ sw) * Jm', DS, vmode, single)
+    IFm = IFp * JJ[q+1..2*q, .]' + ((om :* (MV :- m)) :/ sw) * Jm'
+    if (rows(DT)) IFm = IFm + _eq_impmeans(om, sw, Jm, M, GI, DT)
+    V = _eq_vagg(IFm, DS, vmode, single)
     st_matrix(base + "Vxm", V[1..M, 1..M])
     st_matrix(base + "Vum", V[M+1..M+M*M, M+1..M+M*M])
     st_matrix(base + "Vcm", V[M+M*M+1..q, M+M*M+1..q])
     // household mean
     Hh = _eq_selstack_hh(EW, DX, DP, M)
-    V = _eq_vagg((om :* (Hh :- E0[3, .])) :/ sw + IFp * JJ[2*q+1..3*q, .]', DS, vmode, single)
+    IFm = (om :* (Hh :- E0[3, .])) :/ sw + IFp * JJ[2*q+1..3*q, .]'
+    if (rows(DT)) IFm = IFm + EDh
+    V = _eq_vagg(IFm, DS, vmode, single)
     st_matrix(base + "Vxh", V[1..M, 1..M])
     st_matrix(base + "Vuh", V[M+1..M+M*M, M+1..M+M*M])
     st_matrix(base + "Vch", V[M+M*M+1..q, M+M*M+1..q])
@@ -2757,16 +3422,16 @@ void _eq_m0dist(string scalar zv, string scalar touse)
     st_local("m0t", strofreal(min(m0 :/ se), "%21.0g"))
 }
 
-// one bootstrap replication: e(b), e(b_free), the nine elasticity matrices
+// one bootstrap replication: e(b), e(b_free), the twelve elasticity matrices
 // (row by row), and under selection delta (0 where not corrected) and psi
 real rowvector _eq_bvec(real scalar sel)
 {
     real rowvector v
     string rowvector nm
     real scalar i
-    nm = ("x", "u", "c", "xm", "um", "cm", "xh", "uh", "ch")
+    nm = ("x", "u", "c", "xw", "uw", "cw", "xm", "um", "cm", "xh", "uh", "ch")
     v = st_matrix("e(b)"), st_matrix("e(b_free)")
-    for (i = 1; i <= 9; i++) v = v, vec(st_matrix("e(elas_" + nm[i] + ")")')'
+    for (i = 1; i <= 12; i++) v = v, vec(st_matrix("e(elas_" + nm[i] + ")")')'
     if (sel) v = v, editmissing(st_matrix("e(sel_delta)"), 0), st_matrix("e(sel_psi)")
     return(v)
 }
@@ -2782,12 +3447,12 @@ void _eq_bpost(real matrix B, real scalar sel, string scalar base)
     nb = cols(st_matrix("e(b)"))
     nf = cols(st_matrix("e(b_free)"))
     M  = st_numscalar("e(ngoods)")
-    nm = ("x", "u", "c", "xm", "um", "cm", "xh", "uh", "ch")
+    nm = ("x", "u", "c", "xw", "uw", "cw", "xm", "um", "cm", "xh", "uh", "ch")
     st_matrix(base + "Vb", C[|1, 1 \ nb, nb|])
     pos = nb
     st_matrix(base + "Vf", C[|pos + 1, pos + 1 \ pos + nf, pos + nf|])
     pos = pos + nf
-    for (i = 1; i <= 9; i++) {
+    for (i = 1; i <= 12; i++) {
         k = (mod(i - 1, 3) == 0 ? M : M * M)
         st_matrix(base + "V" + nm[i], C[|pos + 1, pos + 1 \ pos + k, pos + k|])
         pos = pos + k
@@ -2812,9 +3477,9 @@ void _eq_fit(string scalar wv, string scalar lpv, string scalar lxv,
              real scalar doe, string scalar desv, real scalar vmode,
              string scalar single, real scalar sel, string scalar qv,
              string scalar selgs, string scalar zms, string scalar seldiag,
-             string scalar selalpha)
+             string scalar selalpha, string scalar lp0v, string scalar grpv)
 {
-    real matrix    Q, zmask, PH, PHI, IFA, Dx
+    real matrix    Q, zmask, PH, PHI, IFA, Dx, IFt, GI, DT, KD
     real rowvector sg, cix, alpha
     real scalar    C, Pt
     real matrix    W, LP, Z, D, U, S, Sig, Sigo, A, V, Vf, As, X, DS, H
@@ -2976,6 +3641,21 @@ void _eq_fit(string scalar wv, string scalar lpv, string scalar lxv,
         A = A + cross(*G[i], om, H)
     }
     Vf = invsym(A)
+    // the influence functions of theta: the exact derivative of the procedure
+    // (not needed by the bootstrap replications, doe < 0)
+    // pimpute(): the map of the imputation, and its influence on the
+    // coefficients (KD) and on the probits (added to IFA)
+    GI = J(N, 0, .) ; DT = J(0, 4, .) ; KD = J(N, 0, .)
+    if (lp0v != "" & doe >= 0) {
+        _eq_impmap(LP, st_data(., tokens(lp0v), touse), st_data(., tokens(grpv), touse),
+                   om, GI, DT)
+        if (rows(DT)) _eq_impcoef(th, Sig, W, LP, LX, Z, om, a0, qd, D, sel, Q, cix,
+                                  zmask, alpha, GI, DT, KD, IFA)
+    }
+    if (doe < 0)  IFt = J(N, Pt, 0)
+    else if (sel) IFt = _eq_ifexact(th, Sig, W, LP, LX, Z, om, a0, qd, D, U, G, KD,
+                                    Q, cix, zmask, alpha, IFA)
+    else          IFt = _eq_ifexact(th, Sig, W, LP, LX, Z, om, a0, qd, D, U, G, KD)
     // with selection, the deltas follow the free parameters of the model
     if (C) {
         Dx = (D, J(rows(D), C, 0)) \ (J(C, cols(D), 0), I(C))
@@ -3030,10 +3710,11 @@ void _eq_fit(string scalar wv, string scalar lpv, string scalar lxv,
     else           DS = J(0, 3, .)
     if (!sel) {
         _eq_elas(th, LP, LX, Z, om, a0, qd, M, elbase)
-        _eq_elasvar(th, LP, LX, Z, om, a0, qd, M, D, U, G, S, A, elbase, doe, DS, vmode, single)
+        _eq_elasvar(th, LP, LX, Z, om, a0, qd, M, D, U, G, S, IFt, elbase, doe, DS, vmode,
+                    single, GI, DT)
     }
-    else _eq_selpost(th, W, LP, LX, Z, Q, om, a0, qd, M, P, D, U, G, S, A, PH, PHI,
-                     cix, zmask, alpha, IFA, elbase, doe, DS, vmode, single, seldiag)
+    else _eq_selpost(th, W, LP, LX, Z, Q, om, a0, qd, M, P, D, U, G, S, IFt, PH, PHI,
+                     cix, zmask, alpha, IFA, elbase, doe, DS, vmode, single, seldiag, GI, DT)
     st_matrix(elbase + "D", Dx)
 }
 

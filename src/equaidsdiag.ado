@@ -1,4 +1,4 @@
-*! equaidsdiag 1.1.0  2026-09-27  Abdelkrim Araar
+*! equaidsdiag 1.2.0  2026-09-29  Abdelkrim Araar
 *! Diagnostics of an AIDS/QUAIDS specification before estimating it: data,
 *! prices, expenditure and alpha_0, demographics, conditioning of the design
 *! at the starting point, small goods; optionally the sensitivity of the
@@ -576,8 +576,8 @@ void _eqd_main(string scalar wv, string scalar lpv, string scalar lxv,
     if (lst != "") {
         printf("{err}warning: goods with less than 1%% of total expenditure:%s.\n", lst)
         printf("{err}         QUAIDS can predict their shares near zero or negative, and the mean\n")
-        printf("{err}         of the household elasticities divides by these shares; the aggregate\n")
-        printf("{err}         elasticities (equaids's default) do not.  Grouping goods also helps.\n")
+        printf("{err}         of the household elasticities (hhmean) divides by these shares; the\n")
+        printf("{err}         households, individuals and market types do not.  Grouping goods also helps.\n")
         nw++
     }
     else printf("{txt}every good has at least 1%% of total expenditure\n")

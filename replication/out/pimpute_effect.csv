@@ -1,0 +1,21 @@
+case,block,estimates,min,max
+"Mexico, pimpute(psu rururb)","coefficients",42,    0.983259,    1.001158
+"Mexico, pimpute(psu rururb)","elasticities, market",55,    0.984668,    1.001112
+"Mexico, pimpute(psu rururb)","elasticities, households",55,    0.983927,    1.001145
+"Mexico, pimpute(psu rururb)","elasticities, reference",55,    0.983765,    1.001142
+"Mexico, pimpute(psu rururb)","elasticities, household mean",55,    0.982649,    1.000824
+"Mexico, pimpute(psu rururb)","all",262,    0.982649,    1.001158
+"Mexico, pimpute(psu rururb), selection","coefficients",46,    0.997321,    1.004991
+"Mexico, pimpute(psu rururb), selection","probits",32,    0.975309,    1.013972
+"Mexico, pimpute(psu rururb), selection","elasticities, market",55,    0.981997,    1.012680
+"Mexico, pimpute(psu rururb), selection","elasticities, households",55,    0.979997,    1.012941
+"Mexico, pimpute(psu rururb), selection","elasticities, reference",55,    0.979674,    1.012972
+"Mexico, pimpute(psu rururb), selection","elasticities, household mean",55,    0.998767,    1.008845
+"Mexico, pimpute(psu rururb), selection","all",298,    0.975309,    1.013972
+"design of Section 6.4, pimpute(grp), selection","coefficients",18,    0.999658,    1.001999
+"design of Section 6.4, pimpute(grp), selection","probits",12,    0.997319,    1.000934
+"design of Section 6.4, pimpute(grp), selection","elasticities, market",21,    0.996336,    1.000575
+"design of Section 6.4, pimpute(grp), selection","elasticities, households",21,    0.996515,    1.000552
+"design of Section 6.4, pimpute(grp), selection","elasticities, reference",21,    0.996472,    1.000630
+"design of Section 6.4, pimpute(grp), selection","elasticities, household mean",21,    0.997552,    1.003454
+"design of Section 6.4, pimpute(grp), selection","all",114,    0.996336,    1.003454

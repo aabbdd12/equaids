@@ -1,0 +1,5 @@
+data,alpha0,N,N_lost,warnings,cond_quad,cond_max
+Poi, 2.203,4048,0,1,   23.38,     29.23
+Poi, alpha_0 = 10,10.000,4048,0,4,  330.77,    412.03
+Mexico, 6.313,10804,5062,7,   35.89,     77.14
+Lecocq-Robin, 2.364,25776,0,5,   30.69,     53.33

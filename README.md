@@ -6,10 +6,12 @@ AIDS and QUAIDS demand systems for household survey data, in Stata.
 1980) and its quadratic extension (Banks, Blundell and Lewbel 1997), with
 demographic variables entering by Ray's (1983) scaling, by iterated feasible
 generalized nonlinear least squares. It reports the elasticities of the
-**market** (the aggregate elasticities, the default), of the **household** (at
-the means), of the **individual** (each household weighted by its size) or the
-mean of the household elasticities, all with analytic standard errors built
-from influence functions: robust, by cluster, or by survey design (`svyset`:
+**households** (the mean of the household elasticities, the default), of the
+**individuals** (each household weighted by its size), of the **market** (the
+aggregate elasticities), of a **reference** household (at the means) or the
+plain mean of the household elasticities, all with analytic standard errors
+built from the exact influence function of the whole procedure: robust, by
+cluster, or by survey design (`svyset`:
 strata, primary sampling units, finite-population correction), or by a
 bootstrap of the whole procedure (`vce(bootstrap)`). For survey data with zero
 shares and unit values, `pimpute()` fills the missing prices of the
@@ -25,7 +27,7 @@ including the estimation of the probits.
   (`equaids_examples`); the Mexican example data are installed with the
   package (`sysuse mexico_2014_cereals`)
 
-Version 1.1.0. Requires Stata 14.2 or later.
+Version 1.2.0. Requires Stata 14.2 or later.
 
 ## Installation
 
@@ -34,6 +36,12 @@ net install equaids, from("https://raw.githubusercontent.com/aabbdd12/equaids/ma
 help equaids
 help equaidsdiag
 ```
+
+## Replication
+
+The folder `replication/` reproduces the numbers of the technical note (its
+README maps each table and figure to a script); it is not installed by
+`net install`. Run its scripts from that folder, in a copy of this repository.
 
 ## Citation
 

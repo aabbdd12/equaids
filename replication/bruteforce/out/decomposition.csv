@@ -1,0 +1,16 @@
+spec,block,variance,estimates,min,max
+poi,coefficients,GN,22,    0.924340,    1.000104
+poi,coefficients,Hobs,22,    0.978456,    1.000958
+poi,coefficients,full,22,    1.000000,    1.000019
+sel,system (theta),GN,12,    0.908946,    1.015135
+sel,system (theta),probit,12,    0.908297,    1.012417
+sel,system (theta),full,12,    0.999994,    1.000002
+sel,probits (alpha),GN,12,    0.991086,    1.019873
+sel,probits (alpha),probit,12,    1.000000,    1.000000
+sel,probits (alpha),full,12,    1.000000,    1.000000
+selimp,system (theta),GN,12,    0.911201,    1.015072
+selimp,system (theta),probit,12,    0.910826,    1.012258
+selimp,system (theta),full,12,    0.998003,    1.000161
+selimp,probits (alpha),GN,12,    0.991930,    1.017862
+selimp,probits (alpha),probit,12,    0.999067,    1.002688
+selimp,probits (alpha),full,12,    0.999067,    1.002688

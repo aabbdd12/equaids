@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.1.0  27sep2026}{...}
+{* *! version 1.2.0  29sep2026}{...}
 {vieweralsosee "equaidsdiag" "help equaidsdiag"}{...}
 {vieweralsosee "[R] demandsys" "help demandsys"}{...}
 {viewerjumpto "Syntax" "equaids##syntax"}{...}
@@ -13,10 +13,10 @@
 {title:Title}
 
 {p2colset 5 16 18 2}{...}
-{p2col:{cmd:equaids} {hline 2}}AIDS and QUAIDS demand systems, with elasticities of the market, the household or the individual, and survey-design inference{p_end}
+{p2col:{cmd:equaids} {hline 2}}AIDS and QUAIDS demand systems, with elasticities of the households, the individuals or the market, and survey-design inference{p_end}
 {p2colreset}{...}
 
-{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.1.0{txt} (27/09/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
+{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.2.0{txt} (29/09/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
 
 
 {marker syntax}{...}
@@ -57,8 +57,8 @@ must sum to one; the prices are given in the same order.
 {synopt:{opt l:evel(#)}}confidence level; default {cmd:level(95)}{p_end}
 
 {syntab:Elasticities and reporting}
-{synopt:{opt elas:ticities(type)}}{cmd:market} (the default), {cmd:households}, {cmd:individuals} or {cmd:hhmean}{p_end}
-{synopt:{opt hhs:ize(varname)}}size of the household; required by {cmd:elasticities(individuals)}{p_end}
+{synopt:{opt elas:ticities(type)}}{cmd:households} (the default), {cmd:individuals}, {cmd:market}, {cmd:reference} or {cmd:hhmean}{p_end}
+{synopt:{opt hhs:ize(varname)}}size of the household; with it, the elasticities are those of the individuals{p_end}
 {synopt:{opt compens:ated}}add the compensated (Hicksian) price elasticities{p_end}
 {synopt:{opt checks}}show the aggregation identities{p_end}
 {synopt:{opt det:ail}}{opt compensated} and {opt checks}{p_end}
@@ -131,12 +131,15 @@ steps with an analytic Jacobian, and reproduces the estimates of these
 commands under the same model and alpha_0.
 
 {pstd}
-The default elasticities are those of the {it:market}: the elasticities of the
-total demand of the population, the household elasticities weighted by each
-household's expenditure on the good (the aggregate elasticities). Those of the
-household, at the means, of the individual, and the mean of the household
-elasticities are available too. Their standard errors include the sampling of
-the households as well as the estimation of the coefficients. All the variances (robust, clustered, survey design) are
+The elasticities are means over the households of the elasticities of each
+household, at its own prices, expenditure and demographics: those of the
+{it:households} by default, each household counting for its weight; of the
+{it:individuals} with {opt hhsize()}, each household counting for its weight
+times its size; of the {it:market}, each household counting for its
+expenditure, the elasticities of total demand. A reference household at the
+means and the unweighted mean of the household elasticities are available
+too. Their standard errors include the sampling of the households as well as
+the estimation of the coefficients. All the variances (robust, clustered, survey design) are
 built from the same influence functions. See {help equaids##remarks:Remarks}.
 
 {pstd}
@@ -194,9 +197,13 @@ Households still without a price leave the sample, and the means are computed
 again until the sample no longer changes: the donors are the households of the
 final sample. The weight is that of the estimation (times {opt hhsize()} under
 {cmd:elasticities(individuals)}). A note reports, good by good, the prices
-filled at each level. The filled prices are then treated as data: the standard
-errors do not include the imputation. {cmd:estat engel} fills them in the same
-way on {cmd:e(sample)}.
+filled at each level. The standard errors include the imputation: a household
+with a price moves the filled prices of its group, and its influence function
+carries that effect (checked against a brute-force influence function). Under
+{cmd:vce(cluster)} or {cmd:vce(svy)} at the level of the first grouping
+variable the effect cancels within clusters, and only the prices filled at a
+wider level contribute. {cmd:vce(bootstrap)} fills the prices again on every
+replication. {cmd:estat engel} fills them in the same way on {cmd:e(sample)}.
 
 {phang}
 {opt selection} corrects for the households that do not buy (Shonkwiler and
@@ -277,7 +284,7 @@ The linearized variance is valid as the number of PSUs per stratum grows:
 with few PSUs per stratum the intervals are slightly too narrow. In a
 simulation of equaids with 5 to 16 PSUs per stratum, the 95% intervals of
 the aggregate elasticities covered 92.5% to 94.4% of the time; with 10 to 32
-PSUs per stratum, 93.1% to 94.8%.
+PSUs per stratum, 93.2% to 94.8%.
 
 {phang}
 {cmd:vce(bootstrap} [{cmd:,} {it:boot_opts}]{cmd:)} estimates the full sample,
@@ -300,46 +307,59 @@ iterate up to 1,000 times unless {opt iterate()} is given. Use it when
 {dlgtab:Elasticities and reporting}
 
 {phang}
-{opt elasticities(market|households|individuals|hhmean)} sets which
-elasticities are reported; the names are those of {cmd:duvm}.
+{opt elasticities(households|individuals|market|reference|hhmean)} sets which
+elasticities are reported. The first three are means over the households of
+the elasticities of each household, at its own prices, expenditure and
+demographics; they differ by the weight of each household in the mean (see
+{help equaids##remarks:Remarks}). The names are those of {cmd:easi} and
+{cmd:duvm}.
 
 {phang2}
-{cmd:market}, the default, gives the elasticities of total demand, the
-aggregate elasticities: each household counts in proportion to its expenditure
-on the good (see {help equaids##remarks:Remarks}).
+{cmd:households}, the default, gives those of the households: each household
+counts for its weight.
 
 {phang2}
-{cmd:households} gives those of the household, at the weighted means of ln p,
-ln x and z, as Poi (2012).
+{cmd:individuals}, the default with {opt hhsize()}, gives those of the
+individuals: each household counts for its weight times its size,
+{opt hhsize()}, in the whole estimation (the coefficients, their variance and
+the mean). With household data the behaviour is that of the household in all
+the types; {cmd:individuals} weights each household by its size: it gives the
+elasticities of the household of the average person, not those of a person
+within the household. It is an estimation, not a display: after it, only
+{cmd:individuals} can be displayed, and it cannot be displayed after another
+estimation. The weight used is stored in {cmd:e(wexp)}, so that {cmd:estat}
+uses the same.
 
 {phang2}
-{cmd:individuals} gives those of the individual: each household counts for its
-weight times its size, {opt hhsize()}, in the whole estimation, and the
-elasticities are evaluated at the means so weighted. With household data the
-behaviour is that of the household in all the types; {cmd:individuals} weights
-each household by its size: it gives the elasticities of the household of the
-average person, not those of a person within the household. It is an
-estimation, not a display: after it, only {cmd:individuals} can be displayed,
-and it cannot be displayed after the other estimation. The weight used is
-stored in {cmd:e(wexp)}, so that {cmd:estat} uses the same.
+{cmd:market} gives the elasticities of total demand: each household counts
+for its weight times its expenditure, which makes each elasticity a ratio of
+totals (the aggregate elasticities).
 
 {phang2}
-{cmd:hhmean} averages the household elasticities with the sampling weights,
-as {helpb demandsys} (which does not weight the average). The household
+{cmd:reference} gives those of a reference household, at the weighted means of
+ln p, ln x and z, as Poi (2012); these were the {cmd:households} of versions
+1.0.0 and 1.1.0.
+
+{phang2}
+{cmd:hhmean} averages the household elasticities with the sampling weights
+only, as {helpb demandsys} (which does not weight the average). The household
 elasticities divide by the predicted shares: {cmd:equaids} warns when some are
 near zero or outside [0,1].
 
 {pmore}
-All four have standard errors. {cmd:market}, {cmd:households} and
-{cmd:hhmean} come from the same estimation and can be displayed on replay
-({cmd:equaids, elasticities(households)}). The names of version 1.0.0 are
-accepted: {cmd:aggregate} for {cmd:market}, {cmd:means} for {cmd:households},
-{cmd:household} for {cmd:hhmean}.
+All five have standard errors. {cmd:households}, {cmd:market},
+{cmd:reference} and {cmd:hhmean} come from the same estimation and can be
+displayed on replay ({cmd:equaids, elasticities(market)}). The older names are
+accepted: {cmd:aggregate} for {cmd:market}, {cmd:means} for {cmd:reference},
+{cmd:household} for {cmd:hhmean}. Version 1.2.0 changed the default (it was
+{cmd:market}) and the meaning of {cmd:households} and {cmd:individuals}
+(they were evaluated at the means).
 
 {phang}
-{opt hhsize(varname)} gives the size of the household, required by
-{cmd:elasticities(individuals)}; it does not enter the model (add it to
-{opt demographics()} for that).
+{opt hhsize(varname)} gives the size of the household, positive. With it and
+without {opt elasticities()}, the elasticities are those of the individuals.
+It does not enter the model (add it to {opt demographics()} for that); with
+another type of elasticities it is not used.
 
 {phang}
 {opt compensated} adds the table of the compensated price elasticities;
@@ -382,27 +402,44 @@ shares and the other parameters at zero.
 {title:Remarks}
 
 {pstd}
-{bf:The aggregate elasticity.} With x_h f_ih the expenditure of household h
-on good i (f the predicted share), the aggregate expenditure elasticity is
-E_i = 1 + sum_h w_h x_h mu_ih / sum_h w_h x_h f_ih, with mu_i = dw_i/d ln x;
-the price elasticities are built in the same way. It is the elasticity of the
-total demand of the population, what a simulation of a price or tax change on
-aggregate demand needs; it divides by no household share, so that goods with
-many small or zero shares do not make it unstable; and, as a ratio of weighted
-totals, its inference under a survey design is standard. The mean of the
-household elasticities, by contrast, divides by each predicted share: on
-small goods a few households with shares near zero drive it.
+{bf:The types of elasticities.} With f_ih the predicted share of good i for
+household h and mu_ih = df_ih/d ln x, the expenditure elasticity of type v is
+E_i = 1 + sum_h v_h mu_ih / sum_h v_h f_ih, with v_h = w_h ({cmd:households}),
+w_h n_h ({cmd:individuals}) or w_h x_h ({cmd:market}); the price
+elasticities are built in the same way. Each is the mean of the elasticities
+of the households weighted by v_h f_ih: no household is chosen as a
+reference, and the mean does not depend on how the means of prices and
+expenditure are taken. The market elasticity is the elasticity of the total
+demand of the population, what a simulation of a price or tax change on
+aggregate demand needs. None divides by a household share, so that goods with
+many small or zero shares do not make them unstable; and, as ratios of
+weighted totals, their inference under a survey design is standard. The
+unweighted mean of the household elasticities ({cmd:hhmean}), by contrast,
+divides by each predicted share: on small goods a few households with shares
+near zero drive it.
 
 {pstd}
-{bf:Standard errors.} The influence function of an aggregate (market)
-elasticity has two terms, the sampling of the households (the summary is taken
+{bf:Standard errors.} The influence function of a households, individuals or
+market elasticity has two terms, the sampling of the households (the summary is taken
 over a sample) and the estimation of the coefficients; both are analytic. They
 agree with the bootstrap of the households and with the Rao-Wu bootstrap of a
 survey design; the design variance equals Stata's own linearization. For the
-elasticities at the means ({cmd:households}, {cmd:individuals}) the sampling
-term is that of the means of ln p, ln x and z, and for {cmd:hhmean} that of the
+reference household ({cmd:reference}) the sampling term is that of the means
+of ln p, ln x and z, and for {cmd:hhmean} that of the
 mean of the household elasticities; their derivatives with respect to the
 coefficients and to the means are taken by central differences.
+
+{pstd}
+The influence function of the coefficients is the exact derivative of the
+whole procedure with respect to the weight of each household: the observed
+Jacobian of the estimating equations of the coefficients and of Sigma jointly
+(the fixed point of iterated FGNLS), and with {opt selection} the probits with
+their observed Hessian. A brute-force influence function (the weight of each
+household moved, the whole estimation re-run) reproduces the standard errors
+to four decimals. The Gauss-Newton information alone, which the robust
+variance of {helpb demandsys} uses, leaves out the residuals times the second
+derivatives of the shares and the estimation of Sigma: on Poi's food data its
+standard errors are up to 8% smaller.
 
 {marker selection}{...}
 {pstd}
@@ -494,7 +531,7 @@ expenditure, one panel per good, as {cmd:estat engel} after {cmd:easi} and
 {bf:At the means} (the default), the model's share is evaluated over a grid of
 log expenditure (the weighted percentiles of ln x, tails trimmed), with the
 log prices and the demographics at their weighted means, the point of
-{opt elasticities(households)}. It is the exact function of the estimate: linear
+{opt elasticities(reference)}. It is the exact function of the estimate: linear
 in ln x for AIDS, quadratic for QUAIDS. The band is the delta method with the
 analytic Jacobian and the variance of the estimate, {cmd:e(V_free)}: robust,
 by cluster or by design as estimated, with t on the design degrees of freedom
@@ -555,7 +592,7 @@ point is marked, the expected share not being quadratic in ln x.
 {synopt:{cmd:e(vce)}}{cmd:robust}, {cmd:cluster}, {cmd:svy}, {cmd:conventional} or {cmd:bootstrap}{p_end}
 {synopt:{cmd:e(boot_design)}, {cmd:e(boot_seed)}}resampling unit and seed ({cmd:vce(bootstrap)}){p_end}
 {synopt:{cmd:e(anot_rule)}}rule of alpha_0, or {cmd:user}{p_end}
-{synopt:{cmd:e(elasticities)}}{cmd:market}, {cmd:households}, {cmd:individuals} or {cmd:hhmean}{p_end}
+{synopt:{cmd:e(elasticities)}}{cmd:households}, {cmd:individuals}, {cmd:market}, {cmd:reference} or {cmd:hhmean}{p_end}
 {synopt:{cmd:e(hhsize)}}the household size variable ({opt hhsize()}){p_end}
 {synopt:{cmd:e(wtype)}, {cmd:e(wexp)}}the weight used (times {opt hhsize()} under {cmd:individuals}){p_end}
 {synopt:{cmd:e(data_notes)}}notes of the data diagnostics{p_end}
@@ -569,9 +606,9 @@ point is marked, the expected share not being quadratic in ln x.
 {synopt:{cmd:e(b)}, {cmd:e(V)}}coefficients (Poi's parameterization) and their variance{p_end}
 {synopt:{cmd:e(b_free)}, {cmd:e(V_free)}}free parameters and their variance{p_end}
 {synopt:{cmd:e(Sigma)}}covariance of the residuals{p_end}
-{synopt:{cmd:e(elas_x)}, {cmd:e(elas_u)}, {cmd:e(elas_c)}}aggregate expenditure, uncompensated and compensated elasticities (rows: goods, columns: prices){p_end}
+{synopt:{cmd:e(elas_x)}, {cmd:e(elas_u)}, {cmd:e(elas_c)}}market expenditure, uncompensated and compensated elasticities (rows: goods, columns: prices){p_end}
 {synopt:{cmd:e(V_elas_x)}, {cmd:e(V_elas_u)}, {cmd:e(V_elas_c)}}their variances{p_end}
-{synopt:{cmd:e(elas_xm)}, {cmd:e(V_elas_xm)}, ...}the same at the means ({cmd:m}: {cmd:households}, {cmd:individuals}) and for the household mean ({cmd:h}: {cmd:hhmean}){p_end}
+{synopt:{cmd:e(elas_xw)}, {cmd:e(V_elas_xw)}, ...}the same for the households ({cmd:w}; the individuals after {cmd:elasticities(individuals)}), for the reference household ({cmd:m}: {cmd:reference}) and for the household mean ({cmd:h}: {cmd:hhmean}){p_end}
 {synopt:{cmd:e(aggshare)}}aggregate budget shares (market){p_end}
 {synopt:{cmd:e(shares_m)}, {cmd:e(shares_h)}}predicted shares at the means, and mean of the predicted shares{p_end}
 {synopt:{cmd:e(vif)}, {cmd:e(demo_stats)}}data diagnostics{p_end}
@@ -606,11 +643,12 @@ Stata's temporary folder. The links call {cmd:equaids_examples} {it:#}
 
 {title:Example 2: The types of elasticities}
 
-{pstd}The market elasticities (the default), those of the household at the means, and the mean of the household elasticities, all from the same estimation.{p_end}
+{pstd}The elasticities of the households (the default), of the market, of the reference household and the mean of the household elasticities, all from the same estimation.{p_end}
 {phang2}{cmd:. webuse food, clear}{p_end}
 {phang2}{cmd:. equaids w1-w4, prices(p1-p4) expenditure(expfd) snames(meat fruitveg bread dairy) notable}{p_end}
-{phang2}{cmd:. equaids, elasticities(market)}{p_end}
 {phang2}{cmd:. equaids, elasticities(households)}{p_end}
+{phang2}{cmd:. equaids, elasticities(market)}{p_end}
+{phang2}{cmd:. equaids, elasticities(reference)}{p_end}
 {phang2}{cmd:. equaids, elasticities(hhmean)}{p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 2":example 2: click to run in command window}){p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 2, do":open as a do-file}){p_end}
@@ -628,7 +666,7 @@ Stata's temporary folder. The links call {cmd:equaids_examples} {it:#}
 {title:Example 4: The elasticities of the individual (Mexican cereals)}
 
 {phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
-{phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp [aw=sweight], prices(pcorn pwheat price pother pcomp) expenditure(hh_current_inc) elasticities(individuals) hhsize(hhsize)}{p_end}
+{phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp [aw=sweight], prices(pcorn pwheat price pother pcomp) expenditure(hh_current_inc) hhsize(hhsize)}{p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 4":example 4: click to run in command window}){p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 4, db":click to run in dialog box}){p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 4, do":open as a do-file}){p_end}
@@ -698,4 +736,4 @@ system of equations. {it:American Journal of Agricultural Economics} 81:
 {title:Author}
 
 {pstd}Abdelkrim Araar, Universit{c e'} Laval / PEP, aabd@ecn.ulaval.ca{p_end}
-{pstd}Version 1.1.0. Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}
+{pstd}Version 1.2.0. Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}

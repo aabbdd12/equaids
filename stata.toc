@@ -1,4 +1,4 @@
 v 3
 d Abdelkrim Araar, Universite Laval / PEP
 d
-p equaids AIDS and QUAIDS demand systems for survey data: elasticities of the market, the household or the individual, with analytic standard errors (robust, cluster, svy) or the bootstrap; missing prices and correction for the non-buyers
+p equaids AIDS and QUAIDS demand systems for survey data: elasticities of the households, the individuals or the market, with analytic standard errors (robust, cluster, svy) or the bootstrap; missing prices and correction for the non-buyers

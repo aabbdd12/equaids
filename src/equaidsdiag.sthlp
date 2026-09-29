@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.1.0  27sep2026}{...}
+{* *! version 1.2.0  29sep2026}{...}
 {* the threshold of D4 is provisional: to be set after the audit on three data sets (audit/diag/)}{...}
 {vieweralsosee "equaids" "help equaids"}{...}
 {viewerjumpto "Syntax" "equaidsdiag##syntax"}{...}
@@ -13,7 +13,7 @@
 {p2col:{cmd:equaidsdiag} {hline 2}}Diagnose an AIDS/QUAIDS specification before estimating it{p_end}
 {p2colreset}{...}
 
-{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.1.0{txt} (27/09/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
+{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.2.0{txt} (29/09/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
 
 
 {marker syntax}{...}
@@ -120,7 +120,7 @@ level and l^2 is almost a linear function of l, so that the quadratic
 coefficients are weakly identified and the sandwich standard errors of the
 coefficients unreliable. On Poi's data with his alpha_0 = 10 this index is
 331, the information matrix of the estimate nearly singular, and the
-bootstrap standard deviations of the coefficients two to four times the
+bootstrap standard deviations of the coefficients up to three times the
 sandwich standard errors; with the default alpha_0 it is 23.
 
 {dlgtab:D5. Small goods}
@@ -128,8 +128,8 @@ sandwich standard errors; with the default alpha_0 it is 23.
 {p 4 4 2}
 Goods with less than 1% of total expenditure: QUAIDS can predict their
 shares near zero or negative, which makes the mean of the household
-elasticities unstable (not the aggregate elasticities, the default of
-{helpb equaids}).
+elasticities ({cmd:hhmean}) unstable (not the households, individuals and
+market elasticities of {helpb equaids}).
 
 {dlgtab:D6. Sensitivity to alpha_0 (option sensitivity)}
 
@@ -160,13 +160,13 @@ often it belongs in the model, through its correlation with expenditure or
 prices (D3): leaving it out moves its effect onto the expenditure and price
 terms. On the data of Lecocq and Robin (seven goods, 25,776 households),
 household size is correlated 0.30 with ln x and only 0.19 with the prices;
-leaving it out moves the expenditure elasticities by up to z = 21, with rho
-well identified (z = 6.8) and 1 + rho'z at least 1.33. Check also its
+leaving it out moves the expenditure elasticities by up to z = 18, with rho
+well identified (z = 9.2) and 1 + rho'z at least 1.33. Check also its
 rho: when 1 + rho'z nears zero for a few households, the fit is driven by
-them and the change is large as well; on Poi's food data a uniform noise
-variable reaches rho = -1.1 (z = -10), min(1 + rho'z) = 0.02, and moves one
-own-price elasticity by z = -3.1. D7 and D6 are the only sections that
-estimate.
+them and the change can be large as well; on Poi's food data a uniform noise
+variable reaches rho = -1.1 (z = -13) and min(1 + rho'z) = 0.02, and leaving
+it out moves one own-price elasticity by -0.06 (z = -2.2, not marked). D7
+and D6 are the only sections that estimate.
 
 
 {marker results}{...}
@@ -224,4 +224,4 @@ New York: Wiley.
 {title:Author}
 
 {pstd}Abdelkrim Araar, Universit{c e'} Laval / PEP, aabd@ecn.ulaval.ca{p_end}
-{pstd}Version 1.1.0 (package equaids). Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}
+{pstd}Version 1.2.0 (package equaids). Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}

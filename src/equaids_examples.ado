@@ -1,4 +1,4 @@
-*! equaids_examples 1.1.0  2026-09-27  Abdelkrim Araar
+*! equaids_examples 1.2.0  2026-09-29  Abdelkrim Araar
 *! The examples of help equaids and help equaidsdiag, run from their links.
 *!   equaids_examples #          run example # in the command window
 *!   equaids_examples #, db      open the dialog box of equaids filled in for example #
@@ -38,12 +38,13 @@ program define equaids_examples
         local n 2
     }
     else if `ex' == 2 {
-        local title "The types of elasticities: market (the default), households, hhmean"
+        local title "The types of elasticities: households (the default), market, reference, hhmean"
         local c1 "equaids `F' snames(meat fruitveg bread dairy) notable"
-        local c2 "equaids, elasticities(market)"
-        local c3 "equaids, elasticities(households)"
-        local c4 "equaids, elasticities(hhmean)"
-        local n 4
+        local c2 "equaids, elasticities(households)"
+        local c3 "equaids, elasticities(market)"
+        local c4 "equaids, elasticities(reference)"
+        local c5 "equaids, elasticities(hhmean)"
+        local n 5
     }
     else if `ex' == 3 {
         local data "sysuse mexico_2014_cereals, clear"
@@ -55,7 +56,7 @@ program define equaids_examples
     else if `ex' == 4 {
         local data "sysuse mexico_2014_cereals, clear"
         local title "The elasticities of the individual (Mexican cereals)"
-        local c1 "equaids `W' [aw=sweight], prices(`P') expenditure(hh_current_inc) elasticities(individuals) hhsize(hhsize)"
+        local c1 "equaids `W' [aw=sweight], prices(`P') expenditure(hh_current_inc) hhsize(hhsize)"
         local n 1
     }
     else if `ex' == 5 {
@@ -131,7 +132,7 @@ program define equaids_examples
         .equaids_dlg.se.sp_reps.setvalue 200
         .equaids_dlg.se.ed_seed.setvalue ""
         .equaids_dlg.se.ck_bsvy.setoff
-        .equaids_dlg.rpt.cb_el.setvalue "market"
+        .equaids_dlg.rpt.cb_el.setvalue "households"
         .equaids_dlg.rpt.vn_hhs.setvalue ""
         .equaids_dlg.rpt.ck_comp.setoff
         .equaids_dlg.rpt.ck_checks.setoff
