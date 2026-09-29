@@ -608,7 +608,9 @@ point is marked, the expected share not being quadratic in ln x.
 {synopt:{cmd:e(Sigma)}}covariance of the residuals{p_end}
 {synopt:{cmd:e(elas_x)}, {cmd:e(elas_u)}, {cmd:e(elas_c)}}market expenditure, uncompensated and compensated elasticities (rows: goods, columns: prices){p_end}
 {synopt:{cmd:e(V_elas_x)}, {cmd:e(V_elas_u)}, {cmd:e(V_elas_c)}}their variances{p_end}
-{synopt:{cmd:e(elas_xw)}, {cmd:e(V_elas_xw)}, ...}the same for the households ({cmd:w}; the individuals after {cmd:elasticities(individuals)}), for the reference household ({cmd:m}: {cmd:reference}) and for the household mean ({cmd:h}: {cmd:hhmean}){p_end}
+{synopt:{cmd:e(elas_xw)}, {cmd:e(V_elas_xw)}, ...}the same for the households
+({cmd:w}; the individuals after {cmd:elasticities(individuals)}), for the reference
+household ({cmd:m}: {cmd:reference}) and for the household mean ({cmd:h}: {cmd:hhmean}){p_end}
 {synopt:{cmd:e(aggshare)}}aggregate budget shares (market){p_end}
 {synopt:{cmd:e(shares_m)}, {cmd:e(shares_h)}}predicted shares at the means, and mean of the predicted shares{p_end}
 {synopt:{cmd:e(vif)}, {cmd:e(demo_stats)}}data diagnostics{p_end}
@@ -655,7 +657,9 @@ Stata's temporary folder. The links call {cmd:equaids_examples} {it:#}
 
 {title:Example 3: Survey design (Mexican cereals)}
 
-{pstd}The sample keeps the households with all their prices; ten strata then have a single PSU, which {cmd:singleunit(centered)} handles (with {cmd:singleunit(missing)} their standard errors would be missing).{p_end}
+{pstd}The sample keeps the households with all their prices; ten strata then have a single PSU,
+which {cmd:singleunit(centered)} handles (with {cmd:singleunit(missing)} their standard errors
+would be missing).{p_end}
 {phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
 {phang2}{cmd:. svyset psu [pweight=sweight], strata(strata) vce(linearized) singleunit(centered)}{p_end}
 {phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp, prices(pcorn pwheat price pother pcomp) expenditure(hh_current_inc) demographics(hhsize isMale) vce(svy)}{p_end}
@@ -692,7 +696,11 @@ Stata's temporary folder. The links call {cmd:equaids_examples} {it:#}
 
 {title:Example 7: The non-buyers (Mexican cereals)}
 
-{pstd}The prices of the non-buyers are filled from their PSU, else from the urban or rural area; the four cereals with zero shares are corrected, with the share of employed members in the probits only; the standard errors are those of a bootstrap of the whole procedure, household size in Ray's scaling bringing the estimate near its boundary under the correction (a few minutes); then the Engel curves of the expected shares.{p_end}
+{pstd}The prices of the non-buyers are filled from their PSU, else from the urban or rural area;
+the four cereals with zero shares are corrected, with the share of employed members in the probits
+only; the standard errors are those of a bootstrap of the whole procedure, household size in Ray's
+scaling bringing the estimate near its boundary under the correction (a few minutes); then the Engel
+curves of the expected shares.{p_end}
 {phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
 {phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp [pw=sweight], prices(pcorn pwheat price pother pcomp)}
 {cmd:expenditure(hh_current_inc) demographics(hhsize isMale) pimpute(psu rururb)}
