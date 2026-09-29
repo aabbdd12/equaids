@@ -624,8 +624,9 @@ household ({cmd:m}: {cmd:reference}) and for the household mean ({cmd:h}: {cmd:h
 {title:Examples}
 
 {pstd}
-The examples use Poi's food data ({cmd:webuse food}) and the Mexican cereals
-installed with the package ({cmd:sysuse mexico_2014_cereals}). Each one runs
+The examples use Poi's food data ({cmd:webuse food}), and the Mexican cereals and
+simulated non-buyers installed with the package ({cmd:sysuse mexico_2014_cereals},
+{cmd:sysuse equaids_nonbuyers}). Each one runs
 from its blue links: in the command window, in the dialog box (filled in; click
 OK), or as a do-file opened in the Do-file Editor. The data in memory are not
 lost: the command window and the do-file give them back at the end, even after
@@ -700,7 +701,8 @@ would be missing).{p_end}
 the four cereals with zero shares are corrected, with the share of employed members in the probits
 only; the standard errors are those of a bootstrap of the whole procedure, household size in Ray's
 scaling bringing the estimate near its boundary under the correction (a few minutes); then the Engel
-curves of the expected shares.{p_end}
+curves of the expected shares. Example 8 shows a regular case, where the analytic standard errors
+are valid.{p_end}
 {phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
 {phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp [pw=sweight], prices(pcorn pwheat price pother pcomp)}
 {cmd:expenditure(hh_current_inc) demographics(hhsize isMale) pimpute(psu rururb)}
@@ -709,6 +711,23 @@ curves of the expected shares.{p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 7":example 7: click to run in command window}){p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 7, db":click to run in dialog box}){p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 7, do":open as a do-file}){p_end}
+
+{title:Example 8: The non-buyers with analytic standard errors (simulated data)}
+
+{pstd}3,000 households simulated from the model of the correction (the design of the technical
+note, Section 6.4): three goods, the first two bought by about 73% and 53% of the households, a
+variable of each probit only (q1, q2), no price for the non-buyers, filled from their group of 25
+households that share a price shock, and household size in Ray's scaling, far from the boundary
+m0(z) > 0. Every parameter is strongly identified: the robust standard errors, clustered by the
+group of the imputation, are valid, as a Monte Carlo of 700 such samples confirms (standard errors
+within 5% of the standard deviations of the estimates), and are computed in seconds.{p_end}
+{phang2}{cmd:. sysuse equaids_nonbuyers, clear}{p_end}
+{phang2}{cmd:. equaids w1 w2 w3, prices(p1 p2 p3) expenditure(x) noquadratic demographics(hs) anot(0)}
+{cmd:pimpute(grp) selection selvars(w1: q1 ; w2: q2) vce(cluster grp)}{p_end}
+{phang2}{cmd:. display "e(m0_t), distance to the boundary m0(z) > 0: " %4.1f e(m0_t) " standard errors"}{p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 8":example 8: click to run in command window}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 8, db":click to run in dialog box}){p_end}
+{p 8 8 2}{txt}({stata "equaids_examples 8, do":open as a do-file}){p_end}
 
 
 {marker references}{...}

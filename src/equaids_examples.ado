@@ -13,8 +13,8 @@ program define equaids_examples
     version 14.2
     syntax anything(name=ex id="example number") [, DB DO NOEDIT]
     capture confirm integer number `ex'
-    if _rc | !inrange(`ex', 1, 7) {
-        di as err "equaids_examples: the examples are numbered 1 to 7 (see help equaids)"
+    if _rc | !inrange(`ex', 1, 8) {
+        di as err "equaids_examples: the examples are numbered 1 to 8 (see help equaids)"
         exit 198
     }
     if "`db'" != "" & "`do'" != "" {
@@ -28,8 +28,8 @@ program define equaids_examples
     local W "wcorn wwheat wrice wother wcomp"
     local P "pcorn pwheat price pother pcomp"
     local n 0
-    * the data of each example: Poi's food data (webuse) or the Mexican cereals
-    * installed with the package (sysuse)
+    * the data of each example: Poi's food data (webuse), the Mexican cereals or
+    * the simulated non-buyers installed with the package (sysuse)
     local data "webuse food, clear"
     if `ex' == 1 {
         local title "The elasticities of four food groups (Poi's data)"
@@ -79,6 +79,13 @@ program define equaids_examples
         local c2 "estat engel"
         local n 2
     }
+    else if `ex' == 8 {
+        local data "sysuse equaids_nonbuyers, clear"
+        local title "The non-buyers with analytic standard errors (simulated data)"
+        local c1 "equaids w1 w2 w3, prices(p1 p2 p3) expenditure(x) noquadratic demographics(hs) anot(0) pimpute(grp) selection selvars(w1: q1 ; w2: q2) vce(cluster grp)"
+        local c2 `"display "e(m0_t), distance to the boundary m0(z) > 0: " %4.1f e(m0_t) " standard errors""'
+        local n 2
+    }
 
     * ---- as a do-file, in Stata's temporary folder ----
     if "`do'" != "" {
@@ -126,9 +133,11 @@ program define equaids_examples
         .equaids_dlg.main.ed_snames.setvalue ""
         .equaids_dlg.main.vl_demo.setvalue ""
         .equaids_dlg.main.ck_anot.setoff
+        .equaids_dlg.main.ed_anot.setvalue ""
         .equaids_dlg.weights.vl_wgt.setvalue ""
         .equaids_dlg.weights.rb_none.seton
         .equaids_dlg.se.rb_robust.seton
+        .equaids_dlg.se.vn_clust.setvalue ""
         .equaids_dlg.se.sp_reps.setvalue 200
         .equaids_dlg.se.ed_seed.setvalue ""
         .equaids_dlg.se.ck_bsvy.setoff
@@ -185,6 +194,24 @@ program define equaids_examples
             .equaids_dlg.se.rb_boot.seton
             .equaids_dlg.se.sp_reps.setvalue 50
             .equaids_dlg.se.ed_seed.setvalue "1"
+        }
+        if `ex' == 8 {
+            .equaids_dlg.main.vl_shares.setvalue "w1 w2 w3"
+            .equaids_dlg.main.vl_prices.setvalue "p1 p2 p3"
+            .equaids_dlg.main.vn_exp.setvalue "x"
+            .equaids_dlg.main.rb_aids.seton
+            .equaids_dlg.main.vl_demo.setvalue "hs"
+            .equaids_dlg.main.ck_anot.seton
+            .equaids_dlg.main.ed_anot.setvalue "0"
+            .equaids_dlg.main.vl_pimp.setvalue "grp"
+            .equaids_dlg.sel.ck_sel.seton
+            .equaids_dlg.sel.cb_ng.setvalue "2"
+            .equaids_dlg.sel.ed_g1.setvalue "w1"
+            .equaids_dlg.sel.vl_v1.setvalue "q1"
+            .equaids_dlg.sel.ed_g2.setvalue "w2"
+            .equaids_dlg.sel.vl_v2.setvalue "q2"
+            .equaids_dlg.se.rb_cluster.seton
+            .equaids_dlg.se.vn_clust.setvalue "grp"
         }
         if `ex' == 6 {
             .equaids_dlg.main.cb_act.setvalue "diag"

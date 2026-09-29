@@ -24,8 +24,9 @@ including the estimation of the probits.
 - `estat diagnostics`, `estat engel`: after estimation
 - every example of `help equaids` runs from its links, in the command window,
   in the dialog box or as a do-file, without losing the data in memory
-  (`equaids_examples`); the Mexican example data are installed with the
-  package (`sysuse mexico_2014_cereals`)
+  (`equaids_examples`); the example data are installed with the package
+  (`sysuse mexico_2014_cereals`, and simulated non-buyers:
+  `sysuse equaids_nonbuyers`)
 
 Version 1.2.0. Requires Stata 14.2 or later.
 

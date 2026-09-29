@@ -19,7 +19,8 @@ d group means (pimpute), correction for the non-buyers (Shonkwiler and Yen
 d 1999, selection) with the probits in the standard errors.
 d Diagnostics before estimation (equaidsdiag), estat diagnostics, Engel curves
 d after estimation (estat engel), dialog box, examples of the help run from
-d links (equaids_examples); example data installed (sysuse mexico_2014_cereals).
+d links (equaids_examples); example data installed (sysuse mexico_2014_cereals,
+d sysuse equaids_nonbuyers).
 d
 d Requires: Stata 14.2 or later
 d
@@ -36,3 +37,5 @@ f src/equaidsdiag.sthlp
 f src/equaids_examples.ado
 F examples/mexico_2014_cereals.dta
 f examples/mexico_2014_cereals.dta
+F examples/equaids_nonbuyers.dta
+f examples/equaids_nonbuyers.dta

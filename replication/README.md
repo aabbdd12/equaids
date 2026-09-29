@@ -18,6 +18,7 @@ the Stata Journal by `get_lr_data.do` (package st0393_3) into `data/`.
 | `selection.do` | §6.6: Mexican cereals without and with the correction for the non-buyers (`vce(bootstrap)`, 100 replications), `e(m0_t)`, linearized vs bootstrap SE of δ | minutes |
 | `dgp_nonbuyers.do` | §6.4: generator of the population of the Monte Carlo of the correction | — |
 | `dgp_describe.do` | §6.4: buyers and pseudo-R² of that population | seconds |
+| `make_example_data.do` | §8.1: the simulated data of example 8 of `help equaids`, installed with the package (`../examples/equaids_nonbuyers.dta`, 3,000 households of that population) | seconds |
 | `mc_nonbuyers.do` | §6.4: Monte Carlo of the correction (700 samples); raw draws shipped in `out/mc_nonbuyers_raw.dta`, `do mc_nonbuyers.do combine 4` rebuilds the summary | hours (combine: seconds) |
 | `diagnostics.do` | §7.2 and §8: `equaidsdiag` (condition indexes 23, 36, 31 and 331; the Mexican report) | seconds |
 | `stability.do` | §7.3, Table `tab:stab` and the paragraph after it | 4 min |
