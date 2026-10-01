@@ -836,6 +836,10 @@ program define _equaids_boot, eclass
     * the variances from the replications, under the names of the analytic ones
     tempname EB T
     mata: _eq_bpost(__eq_bs, `sel', "`EB'")
+    * the replications themselves, for estat engel (the curve of each one);
+    * a Stata older than 16 may refuse a matrix with more rows than matsize
+    capture mata: _eq_bdraws(__eq_bs, `sel', "`EB'")
+    local bdraws = (_rc == 0)
     mata: mata drop __eq_bs
     matrix `T' = e(V)
     mata: st_replacematrix("`T'", st_matrix("`EB'Vb"))
@@ -861,6 +865,20 @@ program define _equaids_boot, eclass
         mata: st_replacematrix("`T'", st_matrix("`EB'Vpsi"))
         ereturn matrix V_sel_psi = `T'
     }
+    * the replications of the free parameters (of psi under selection) and of
+    * alpha_0: estat engel draws the curve of each one, the band is their spread
+    if `bdraws' {
+        matrix colnames `EB'Df = `: colfullnames e(b_free)'
+        ereturn matrix boot_b_free = `EB'Df
+        matrix colnames `EB'Da0 = anot
+        ereturn matrix boot_anot = `EB'Da0
+        if `sel' {
+            matrix colnames `EB'Dpsi = `: colfullnames e(sel_psi)'
+            ereturn matrix boot_sel_psi = `EB'Dpsi
+        }
+    }
+    else di as txt "note: the replications could not be kept in e() (more than this Stata allows" ///
+        _n "  in a matrix): estat engel will draw no confidence band"
     ereturn scalar V_missing = 0
     ereturn scalar elastse = 1
     ereturn scalar N_reps = `reps'
@@ -1322,17 +1340,20 @@ version 14.2
 * estat engel (internal): the fitted shares
 *   grid  on the ln x of the grid rows, prices and demographics at the vectors
 *         lpm and zm; standard errors from the analytic Jacobian and
-*         e(V_free); turning points of the quadratic Engel curves
+*         e(V_free), or with boot the standard deviation of the curves of the
+*         bootstrap replications; turning points of the quadratic Engel curves
 *   obs   for every household, as observed
 * writes <out>w1..wM (and <out>se1..seM on the grid)
 program define _equaids_engel, rclass
     syntax , MODE(string) LX(varname) TOUSE(varname) OUT(string) ///
-        [LP(varlist) Z(varlist) Q(varlist) LPM(name) ZM(name) QM(name) NOVAR]
-    local doV = ("`novar'" == "")
+        [LP(varlist) Z(varlist) Q(varlist) LPM(name) ZM(name) QM(name) NOVAR BOOT]
+    local doV = cond("`novar'" != "", 0, cond("`boot'" != "", 2, 1))
     if "`mode'" == "grid" {
+        local eqnb .
         mata: _eq_engel_grid("`lx'", "`touse'", "`lpm'", "`zm'", "`out'", `doV', "`qm'")
         return matrix lnx_turn = __eq_turn
         return scalar ok = `eqok'
+        if `doV' == 2 return scalar nb = `eqnb'
     }
     else mata: _eq_engel_obs("`lp'", "`lx'", "`z'", "`touse'", "`out'", "`q'")
 end
@@ -1451,7 +1472,8 @@ void _eq_engel_grid(string scalar lxv, string scalar touse, string scalar lpm,
     if (st_global("e(selection)") != "") {
         if (args() > 6 & qm != "") Q = J(n, 1, 1) * st_matrix(qm)
         else                       Q = J(n, 0, .)
-        _eq_selengel(LP, LX, Z, Q, doV, EW, SE)
+        _eq_selengel(LP, LX, Z, Q, doV == 1, EW, SE)
+        if (doV == 2) SE = _eq_engel_bootse(LP, LX, Z, Q, 1, M, K, qd)
         st_local("eqok", strofreal(!hasmissing(EW)))
         st_matrix("__eq_turn", J(1, M, .))
         for (i = 1; i <= M; i++) {
@@ -1465,7 +1487,7 @@ void _eq_engel_grid(string scalar lxv, string scalar touse, string scalar lpm,
         return
     }
     D   = _eq_dmat(cols(th), M, K, qd)
-    ok  = _eq_fitted(th, LP, LX, Z, a0, qd, M, D, F, G, doV)
+    ok  = _eq_fitted(th, LP, LX, Z, a0, qd, M, D, F, G, doV == 1)
     st_local("eqok", strofreal(ok))
     st_matrix("__eq_turn", J(1, M, .))
     if (!ok) return
@@ -1473,7 +1495,14 @@ void _eq_engel_grid(string scalar lxv, string scalar touse, string scalar lpm,
         (void) st_addvar("double", out + "w" + strofreal(i))
         st_store(., out + "w" + strofreal(i), touse, F[., i])
     }
-    if (doV) {
+    if (doV == 2) {
+        SE = _eq_engel_bootse(LP, LX, Z, J(n, 0, .), 0, M, K, qd)
+        for (i = 1; i <= M; i++) {
+            (void) st_addvar("double", out + "se" + strofreal(i))
+            st_store(., out + "se" + strofreal(i), touse, SE[., i])
+        }
+    }
+    else if (doV) {
         V = st_matrix("e(V_free)")
         for (i = 1; i <= M; i++) {
             if (i < M) g = *G[i]
@@ -1501,6 +1530,50 @@ void _eq_engel_grid(string scalar lxv, string scalar touse, string scalar lpm,
         }
         st_matrix("__eq_turn", tp)
     }
+}
+
+// the band of estat engel under vce(bootstrap): the curve of every replication
+// (its parameters, e(boot_b_free) or under selection e(boot_sel_psi), and its
+// alpha_0, e(boot_anot)) on the same grid and at the same means, and their
+// standard deviation over the replications whose curve is defined (m0(z) > 0
+// at the means). The delta method with the bootstrap variance of the
+// parameters fails where they spread along directions that hardly move the
+// shares (near the boundary of Ray's scaling). Sets the local eqnb, the
+// number of replications used
+real matrix _eq_engel_bootse(real matrix LP, real colvector LX, real matrix Z,
+                             real matrix Q, real scalar sel, real scalar M,
+                             real scalar K, real scalar qd)
+{
+    real matrix    TH, Y, F, DX, DP, zmask, D, SE, Yi
+    real colvector A0
+    real rowvector cix, idx
+    real scalar    R, r, n, nb, P, i
+    pointer(real matrix) rowvector G
+
+    TH = st_matrix(sel ? "e(boot_sel_psi)" : "e(boot_b_free)")
+    A0 = st_matrix("e(boot_anot)")
+    R  = rows(TH)
+    n  = rows(LX)
+    if (sel) _eq_selctx(M, cix, zmask, P)
+    else     D = _eq_dmat(cols(TH), M, K, qd)
+    Y  = J(n, 0, .)
+    nb = 0
+    for (r = 1; r <= R; r++) {
+        if (sel) _eq_selparts(TH[r, .], LP, LX, Z, Q, A0[r], qd, M, P, cix, zmask, F, DX, DP)
+        else if (!_eq_fitted(TH[r, .], LP, LX, Z, A0[r], qd, M, D, F, G, 0)) continue
+        if (hasmissing(F)) continue
+        Y = Y, F
+        nb++
+    }
+    st_local("eqnb", strofreal(nb))
+    SE = J(n, M, .)
+    if (nb < 2) return(SE)
+    for (i = 1; i <= M; i++) {
+        idx = (0..(nb - 1)) :* M :+ i
+        Yi  = Y[., idx]
+        SE[., i] = sqrt(rowsum((Yi :- rowsum(Yi) :/ nb) :^ 2) :/ (nb - 1))
+    }
+    return(SE)
 }
 
 void _eq_engel_obs(string scalar lpv, string scalar lxv, string scalar zv,
@@ -3423,7 +3496,9 @@ void _eq_m0dist(string scalar zv, string scalar touse)
 }
 
 // one bootstrap replication: e(b), e(b_free), the twelve elasticity matrices
-// (row by row), and under selection delta (0 where not corrected) and psi
+// (row by row), under selection delta (0 where not corrected) and psi, and
+// alpha_0 last (unless anot() imposes it, its rule is applied again on each
+// resample)
 real rowvector _eq_bvec(real scalar sel)
 {
     real rowvector v
@@ -3433,7 +3508,24 @@ real rowvector _eq_bvec(real scalar sel)
     v = st_matrix("e(b)"), st_matrix("e(b_free)")
     for (i = 1; i <= 12; i++) v = v, vec(st_matrix("e(elas_" + nm[i] + ")")')'
     if (sel) v = v, editmissing(st_matrix("e(sel_delta)"), 0), st_matrix("e(sel_psi)")
+    v = v, st_numscalar("e(anot)")
     return(v)
+}
+
+// the replications kept for estat engel, in the layout of _eq_bvec: e(b_free),
+// e(sel_psi) under selection, and alpha_0
+void _eq_bdraws(real matrix B, real scalar sel, string scalar base)
+{
+    real scalar nb, nf, np, c
+    nb = cols(st_matrix("e(b)"))
+    nf = cols(st_matrix("e(b_free)"))
+    c  = cols(B)
+    st_matrix(base + "Df", B[|1, nb + 1 \ rows(B), nb + nf|])
+    if (sel) {
+        np = cols(st_matrix("e(sel_psi)"))
+        st_matrix(base + "Dpsi", B[|1, c - np \ rows(B), c - 1|])
+    }
+    st_matrix(base + "Da0", B[., c])
 }
 
 // the variances of the replications, in the layout of _eq_bvec

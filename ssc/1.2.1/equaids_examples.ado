@@ -130,8 +130,17 @@ program define equaids_examples
             di as err "equaids_examples: example `ex' runs commands after the estimation; run it in the command window"
             exit 198
         }
-        local isex : char _dta[equaids_example]
-        if c(changed) & "`isex'" != "1" {
+        * the example data loaded for a dialog box carry a mark, here
+        * _dta[equaids_example], and _dta[easi_example] or _dta[duvm_example]
+        * from the examples of easi and duvm (easi builds prices in levels on
+        * them, which sets c(changed)): they are replaced without asking; the
+        * user's own data with changes are not
+        local isex 0
+        local cl : char _dta[]
+        foreach c of local cl {
+            if substr("`c'", -8, .) == "_example" & `"`: char _dta[`c']'"' == "1" local isex 1
+        }
+        if c(changed) & !`isex' {
             di as err "equaids_examples, db: the data in memory have changes not saved;"
             di as err "save them (or clear) first: the dialog box needs the example data in memory"
             exit 4

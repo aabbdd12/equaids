@@ -1,4 +1,4 @@
-*! equaids_estat 1.1.0  2026-09-27  Abdelkrim Araar
+*! equaids_estat 1.2.1  2026-10-01  Abdelkrim Araar
 *! estat after equaids:
 *!   estat diagnostics   the diagnostics of the estimate and of the data
 *!   estat engel         the Engel curves (layout of easi and duvm)
@@ -88,9 +88,24 @@ program define _equaids_estat_engel, rclass
     local demos `e(demographics)'
 
     * the band: the variance of the estimate (robust, cluster or design), t
-    * with the design degrees of freedom under vce(svy)
+    * with the design degrees of freedom under vce(svy); under vce(bootstrap),
+    * the spread of the curves of the replications (not the delta method with
+    * their variance: near the boundary of Ray's scaling the parameters of the
+    * replications spread along directions that hardly move the shares)
     local ci = ("`noci'" == "" & !`asobs')
-    if `ci' {
+    local bootband = (`ci' & "`e(vce)'" == "bootstrap")
+    if `bootband' {
+        local dm = cond("`e(selection)'" != "", "boot_sel_psi", "boot_b_free")
+        capture confirm matrix e(`dm')
+        local miss = _rc
+        capture confirm matrix e(boot_anot)
+        if `miss' | _rc {
+            di as txt "(no confidence band: e() does not hold the bootstrap replications)"
+            local ci 0
+            local bootband 0
+        }
+    }
+    else if `ci' {
         tempname VF
         matrix `VF' = e(V_free)
         if matmissing(`VF') {
@@ -167,12 +182,22 @@ program define _equaids_estat_engel, rclass
     matrix colnames `TURN' = `names'
     matrix rownames `TURN' = lnx pctile
     if !`asobs' {
-        local nv = cond(`ci', "", "novar")
+        local nv = cond(`ci', cond(`bootband', "boot", ""), "novar")
         quietly equaids, _engel mode(grid) lx(`gx') touse(`gt') out(_eqg) ///
             lpm(`LPM') `zopt' `qopt' `nv'
         if !r(ok) {
             di as err "m0(z) <= 0 at the means of the demographics: no Engel curve"
             exit 459
+        }
+        if `bootband' {
+            local nb = r(nb)
+            if `nb' < 2 {
+                di as txt "(no confidence band: fewer than 2 replications have a curve, m0(z) > 0 at the means)"
+                local ci 0
+            }
+            else if `nb' < e(N_reps_ok) {
+                di as txt "(band from `nb' of the " e(N_reps_ok) " replications: m0(z) <= 0 at the means in the others)"
+            }
         }
         tempname LT
         matrix `LT' = r(lnx_turn)
@@ -288,7 +313,10 @@ program define _equaids_estat_engel, rclass
             local nt2 "`nt2'tails trimmed at `trim'%"
         }
         if "`nt2'" != "" local nt `"`nt' "`nt2'""'
-        if `ci' local nt `"`nt' "`level'% confidence band, delta method, vce(`e(vce)')""'
+        if `ci' & `bootband' {
+            local nt `"`nt' "`level'% confidence band, vce(bootstrap): standard deviation of the curves of `nb' replications""'
+        }
+        else if `ci' local nt `"`nt' "`level'% confidence band, delta method, vce(`e(vce)')""'
         local ncol = ceil(sqrt(`M'))
         local nrow = ceil(`M' / `ncol')
         local grid
@@ -308,6 +336,8 @@ program define _equaids_estat_engel, rclass
     return scalar n = `n'
     if `asobs' return scalar bwidth = `bwidth'
     else       return matrix turn = `TURN'
+    if `ci' return local band = cond(`bootband', "bootstrap", "delta")
+    if `ci' & `bootband' return scalar band_reps = `nb'
 end
 
 program define _equaids_estat_diag, rclass
