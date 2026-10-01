@@ -1,5 +1,5 @@
 * make_example_data.do -- the simulated data of example 8 of help equaids,
-* installed with the package (sysuse equaids_nonbuyers): 3,000 households
+* an ancillary file of the package (equaids_nonbuyers.dta): 3,000 households
 * drawn from the population of the Monte Carlo of the correction for the
 * non-buyers (Section 6.4, dgp_nonbuyers.do: rho = 0.3, beta = (-0.10,
 * 0.08), every parameter strongly identified).  Writes

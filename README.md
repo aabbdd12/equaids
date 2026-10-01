@@ -24,9 +24,9 @@ including the estimation of the probits.
 - `estat diagnostics`, `estat engel`: after estimation
 - every example of `help equaids` runs from its links, in the command window,
   in the dialog box or as a do-file, without losing the data in memory
-  (`equaids_examples`); the example data are installed with the package
-  (`sysuse mexico_2014_cereals`, and simulated non-buyers:
-  `sysuse equaids_nonbuyers`)
+  (`equaids_examples`); the example data (`mexico_2014_cereals.dta`, and
+  simulated non-buyers: `equaids_nonbuyers.dta`) are ancillary files, read
+  from the current folder, else from the SSC archive or GitHub
 
 Version 1.2.0. Requires Stata 14.2 or later.
 
@@ -34,9 +34,13 @@ Version 1.2.0. Requires Stata 14.2 or later.
 
 ```stata
 net install equaids, from("https://raw.githubusercontent.com/aabbdd12/equaids/main") replace
+net get equaids, from("https://raw.githubusercontent.com/aabbdd12/equaids/main") replace
 help equaids
 help equaidsdiag
 ```
+
+The second line copies the example data into the current folder (optional:
+the examples of the help read them online when they are not there).
 
 ## Replication
 

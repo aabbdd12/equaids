@@ -625,8 +625,11 @@ household ({cmd:m}: {cmd:reference}) and for the household mean ({cmd:h}: {cmd:h
 
 {pstd}
 The examples use Poi's food data ({cmd:webuse food}), and the Mexican cereals and
-simulated non-buyers installed with the package ({cmd:sysuse mexico_2014_cereals},
-{cmd:sysuse equaids_nonbuyers}). Each one runs
+simulated non-buyers, ancillary files of the package ({cmd:mexico_2014_cereals.dta},
+{cmd:equaids_nonbuyers.dta}): {stata "ssc install equaids, all replace"} (or
+{cmd:net get equaids}) copies them into the current folder; the links read them
+from there, else from the SSC archive, else from GitHub, and write nothing to
+disk. Each one runs
 from its blue links: in the command window, in the dialog box (filled in; click
 OK), or as a do-file opened in the Do-file Editor. The data in memory are not
 lost: the command window and the do-file give them back at the end, even after
@@ -661,7 +664,7 @@ Stata's temporary folder. The links call {cmd:equaids_examples} {it:#}
 {pstd}The sample keeps the households with all their prices; ten strata then have a single PSU,
 which {cmd:singleunit(centered)} handles (with {cmd:singleunit(missing)} their standard errors
 would be missing).{p_end}
-{phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
+{phang2}{cmd:. use mexico_2014_cereals, clear}{p_end}
 {phang2}{cmd:. svyset psu [pweight=sweight], strata(strata) vce(linearized) singleunit(centered)}{p_end}
 {phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp, prices(pcorn pwheat price pother pcomp) expenditure(hh_current_inc) demographics(hhsize isMale) vce(svy)}{p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 3":example 3: click to run in command window}){p_end}
@@ -670,7 +673,7 @@ would be missing).{p_end}
 
 {title:Example 4: The elasticities of the individual (Mexican cereals)}
 
-{phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
+{phang2}{cmd:. use mexico_2014_cereals, clear}{p_end}
 {phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp [aw=sweight], prices(pcorn pwheat price pother pcomp) expenditure(hh_current_inc) hhsize(hhsize)}{p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 4":example 4: click to run in command window}){p_end}
 {p 8 8 2}{txt}({stata "equaids_examples 4, db":click to run in dialog box}){p_end}
@@ -703,7 +706,7 @@ only; the standard errors are those of a bootstrap of the whole procedure, house
 scaling bringing the estimate near its boundary under the correction (a few minutes); then the Engel
 curves of the expected shares. Example 8 shows a regular case, where the analytic standard errors
 are valid.{p_end}
-{phang2}{cmd:. sysuse mexico_2014_cereals, clear}{p_end}
+{phang2}{cmd:. use mexico_2014_cereals, clear}{p_end}
 {phang2}{cmd:. equaids wcorn wwheat wrice wother wcomp [pw=sweight], prices(pcorn pwheat price pother pcomp)}
 {cmd:expenditure(hh_current_inc) demographics(hhsize isMale) pimpute(psu rururb)}
 {cmd:selection selvars(perc_ocupa) vce(bootstrap, reps(50) seed(1))}{p_end}
@@ -721,7 +724,7 @@ households that share a price shock, and household size in Ray's scaling, far fr
 m0(z) > 0. Every parameter is strongly identified: the robust standard errors, clustered by the
 group of the imputation, are valid, as a Monte Carlo of 700 such samples confirms (standard errors
 within 5% of the standard deviations of the estimates), and are computed in seconds.{p_end}
-{phang2}{cmd:. sysuse equaids_nonbuyers, clear}{p_end}
+{phang2}{cmd:. use equaids_nonbuyers, clear}{p_end}
 {phang2}{cmd:. equaids w1 w2 w3, prices(p1 p2 p3) expenditure(x) noquadratic demographics(hs) anot(0)}
 {cmd:pimpute(grp) selection selvars(w1: q1 ; w2: q2) vce(cluster grp)}{p_end}
 {phang2}{cmd:. display "e(m0_t), distance to the boundary m0(z) > 0: " %4.1f e(m0_t) " standard errors"}{p_end}
