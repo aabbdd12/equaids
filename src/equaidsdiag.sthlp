@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.2.0  29sep2026}{...}
+{* *! version 1.2.1  01oct2026}{...}
 {* the threshold of D4 is provisional: to be set after the audit on three data sets (audit/diag/)}{...}
 {vieweralsosee "equaids" "help equaids"}{...}
 {viewerjumpto "Syntax" "equaidsdiag##syntax"}{...}
@@ -13,7 +13,7 @@
 {p2col:{cmd:equaidsdiag} {hline 2}}Diagnose an AIDS/QUAIDS specification before estimating it{p_end}
 {p2colreset}{...}
 
-{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.2.0{txt} (29/09/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
+{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.2.1{txt} (01/10/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
 
 
 {marker syntax}{...}
@@ -224,4 +224,4 @@ New York: Wiley.
 {title:Author}
 
 {pstd}Abdelkrim Araar, Universit{c e'} Laval / PEP, aabd@ecn.ulaval.ca{p_end}
-{pstd}Version 1.2.0 (package equaids). Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}
+{pstd}Version 1.2.1 (package equaids). Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}

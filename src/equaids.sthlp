@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.2.0  29sep2026}{...}
+{* *! version 1.2.1  01oct2026}{...}
 {vieweralsosee "equaidsdiag" "help equaidsdiag"}{...}
 {vieweralsosee "[R] demandsys" "help demandsys"}{...}
 {viewerjumpto "Syntax" "equaids##syntax"}{...}
@@ -16,7 +16,7 @@
 {p2col:{cmd:equaids} {hline 2}}AIDS and QUAIDS demand systems, with elasticities of the households, the individuals or the market, and survey-design inference{p_end}
 {p2colreset}{...}
 
-{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.2.0{txt} (29/09/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
+{p 4 4 2}{txt}Package {cmd:equaids}, version {res}1.2.1{txt} (01/10/2026) {c |} Stata {res}14.2{txt} or later {c |} first release {res}1.0.0{txt} (25/09/2026){p_end}
 
 
 {marker syntax}{...}
@@ -293,8 +293,9 @@ then resamples the households (or the PSUs of {opt psu()}, within the strata of
 replacement, and on each replication runs the whole procedure again: the
 prices filled by {opt pimpute()}, the probits of {opt selection}, alpha_0 by
 its rule, the system. The households keep their weights. The variances of the
-coefficients, of delta, of the four types of elasticities, and those used by
-{cmd:estat engel}, are the variances of the replications. A replication that
+coefficients, of delta and of the four types of elasticities are the variances
+of the replications; the replications of the parameters are kept for
+{cmd:estat engel}, which draws the curve of each one. A replication that
 does not converge is dropped and counted ({cmd:e(N_reps_ok)}); the replications
 iterate up to 1,000 times unless {opt iterate()} is given. Use it when
 {cmd:equaids} warns that the linearized standard errors are unreliable (see
@@ -535,7 +536,17 @@ log prices and the demographics at their weighted means, the point of
 in ln x for AIDS, quadratic for QUAIDS. The band is the delta method with the
 analytic Jacobian and the variance of the estimate, {cmd:e(V_free)}: robust,
 by cluster or by design as estimated, with t on the design degrees of freedom
-under {cmd:vce(svy)}. For QUAIDS, the turning point of each curve, where
+under {cmd:vce(svy)}. Under {cmd:vce(bootstrap)}, the band comes from the
+replications themselves, as the standard errors of the elasticities do: the
+curve of each replication, with its parameters and its alpha_0
+({cmd:e(boot_b_free)}, {cmd:e(boot_anot)}), on the same grid and at the same
+means, and the band is the curve plus or minus z times their standard
+deviation. The delta method with the bootstrap variance of the parameters
+fails where the estimator is not regular: near the boundary of Ray's scaling
+(example 7), the parameters of the replications spread far along directions
+that hardly move the shares, and the linearized band is far too wide. A
+replication whose curve is not defined (m0(z) <= 0 at the means) is left out
+and counted. For QUAIDS, the turning point of each curve, where
 d w_i / d l = beta_i + eta_i'z + 2 lambda_i l / (b c) = 0, is marked by a
 vertical line when it falls inside the grid, and returned in
 {cmd:r(turn)} (ln x and its percentile). A curve that turns inside the range
@@ -554,11 +565,14 @@ demographics along ln x; {opt observed} is therefore refused at the means.
 {pstd}
 {bf:After selection}, the curves are those of the expected shares,
 Phi f + delta phi, at the means of the variables of the probits too; the band
-includes the estimation of the probits ({cmd:e(V_sel_psi)}), and no turning
+includes the estimation of the probits ({cmd:e(V_sel_psi)}; under
+{cmd:vce(bootstrap)}, the replications {cmd:e(boot_sel_psi)}), and no turning
 point is marked, the expected share not being quadratic in ln x.
 
 {pstd}
-{cmd:estat engel} stores {cmd:r(n)} and, at the means, {cmd:r(turn)}; with
+{cmd:estat engel} stores {cmd:r(n)} and, at the means, {cmd:r(turn)} and the
+kind of band, {cmd:r(band)} ({cmd:delta} or {cmd:bootstrap}; with
+{cmd:bootstrap}, {cmd:r(band_reps)}, the replications used); with
 {opt asobserved}, {cmd:r(bwidth)}.
 
 
@@ -618,6 +632,8 @@ household ({cmd:m}: {cmd:reference}) and for the household mean ({cmd:h}: {cmd:h
 {synopt:{cmd:e(sel_alpha)}}probit coefficients by good: constant, ln(p/x), demographics, {opt selvars()} (missing where a variable does not enter){p_end}
 {synopt:{cmd:e(sel_diag)}}by good: percentage of buyers, pseudo-R2, perfectly predicted, VIF of beta{p_end}
 {synopt:{cmd:e(sel_psi)}, {cmd:e(V_sel_psi)}}free parameters and probit coefficients, and their variance ({cmd:estat engel}){p_end}
+{synopt:{cmd:e(boot_b_free)}, {cmd:e(boot_anot)}}the replications of {cmd:e(b_free)} and of alpha_0, one row each ({cmd:vce(bootstrap)}; {cmd:estat engel}){p_end}
+{synopt:{cmd:e(boot_sel_psi)}}the replications of {cmd:e(sel_psi)} ({cmd:vce(bootstrap)} with {opt selection}; {cmd:estat engel}){p_end}
 
 
 {marker examples}{...}
@@ -634,7 +650,8 @@ from its blue links: in the command window, in the dialog box (filled in; click
 OK), or as a do-file opened in the Do-file Editor. The data in memory are not
 lost: the command window and the do-file give them back at the end, even after
 an error; the dialog box, which needs the example data in memory, refuses to
-replace data that have unsaved changes. Files written by the examples go to
+replace data that have unsaved changes, unless they are example data loaded
+for a dialog box (by equaids, duvm or easi). Files written by the examples go to
 Stata's temporary folder. The links call {cmd:equaids_examples} {it:#}
 [{cmd:, db} | {cmd:do}].
 
@@ -766,4 +783,4 @@ system of equations. {it:American Journal of Agricultural Economics} 81:
 {title:Author}
 
 {pstd}Abdelkrim Araar, Universit{c e'} Laval / PEP, aabd@ecn.ulaval.ca{p_end}
-{pstd}Version 1.2.0. Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}
+{pstd}Version 1.2.1. Requires Stata 14.2 or later. License: GPL-3.0-or-later.{p_end}

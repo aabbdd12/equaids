@@ -28,7 +28,7 @@ including the estimation of the probits.
   simulated non-buyers: `equaids_nonbuyers.dta`) are ancillary files, read
   from the current folder, else from the SSC archive or GitHub
 
-Version 1.2.0. Requires Stata 14.2 or later.
+Version 1.2.1. Requires Stata 14.2 or later.
 
 ## Installation
 
