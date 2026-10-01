@@ -1,0 +1,3 @@
+v 3
+d equaids 1.2.1, the copy submitted to the SSC archive
+p equaids module to estimate AIDS and QUAIDS demand systems with survey data

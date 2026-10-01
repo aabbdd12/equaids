@@ -1,0 +1,55 @@
+v 3
+d 'EQUAIDS': module to estimate AIDS and QUAIDS demand systems with survey data
+d
+d  equaids estimates the almost ideal demand system (Deaton and Muellbauer
+d  1980) and its quadratic extension (Banks, Blundell and Lewbel 1997), with
+d  demographics by Ray's scaling, by iterated feasible generalized nonlinear
+d  least squares (Gauss-Newton with an analytic Jacobian, in Mata). It
+d  reports the elasticities of the households (the mean of the household
+d  elasticities, the default), of the individuals (weights times household
+d  size), of the market (aggregate) and of a reference household (at the
+d  means), all with analytic standard errors from the exact influence
+d  function of the whole procedure: robust, by cluster or by survey design
+d  (svyset), or a bootstrap of the whole procedure. The missing prices of the
+d  non-buyers are filled by group means (pimpute), and the non-buyers are
+d  corrected for by the two-step method of Shonkwiler and Yen (1999)
+d  (selection), with the probits and the imputation in the standard errors.
+d  equaidsdiag and estat diagnostics check the data and the fit; estat engel
+d  gives the Engel curves; tables with significance stars can be written to
+d  Word, LaTeX, Excel, CSV or Markdown; a dialog box and help examples run
+d  from clickable links are included. A technical note documents the model,
+d  the estimator and the validation of the standard errors; it is included as
+d  an ancillary file (equaids_technical_note.pdf) and on Zenodo:
+d  https://doi.org/10.5281/zenodo.22959991
+d
+d KW: demand system
+d KW: AIDS
+d KW: QUAIDS
+d KW: price elasticities
+d KW: household survey
+d KW: censoring
+d KW: survey design
+d
+d Requires: Stata version 14.2
+d
+d Distribution-Date: 20261001
+d
+d Author: Abdelkrim Araar, Universite Laval and Partnership for Economic Policy (PEP)
+d Support: email aabd@ecn.ulaval.ca
+d
+d (A copy of the package as submitted to the SSC archive, version 1.2.1, to
+d test it before SSC publishes it: the example data and the other ancillary
+d files are copied to the current folder by net get.)
+d
+f equaids.ado
+f equaids.sthlp
+f equaids.dlg
+f equaids_estat.ado
+f _equaids_tabstars.ado
+f _equaids_pimpute.ado
+f equaidsdiag.ado
+f equaidsdiag.sthlp
+f equaids_examples.ado
+f mexico_2014_cereals.dta
+f equaids_nonbuyers.dta
+f equaids_technical_note.pdf

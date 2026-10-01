@@ -1,0 +1,994 @@
+/*
+    equaids.dlg  —  dialog for equaids 1.2.1 (AIDS and QUAIDS demand systems)
+    db equaids
+
+    One dialog for the two commands (as easi's): Action = estimate the model
+    (equaids) or diagnose the specification (equaidsdiag).  Under the
+    diagnostic the controls that belong to the estimator alone are greyed
+    out, rather than filled in and silently dropped.
+
+    Tabs, as in Stata's estimation dialogs (and duvm's):
+      Model        action, shares, prices, expenditure, model, demographics,
+                   alpha_0, short names, missing prices (pimpute)
+      Selection    correction for the non-buyers: the shares corrected
+                   (selgoods) and the variables of the probits only (selvars),
+                   for every corrected good or good by good (as duvm's)
+      if/in        standard include (ifin)
+      Weights      standard include (weights_fpai: fweight pweight aweight iweight)
+      SE/Robust    robust (default), cluster, survey design, conventional
+      Reporting    elasticities (households, individuals + household size,
+                   market, reference, hhmean), level, decimals, tables, file
+      Estimation   tolerance, iterations, iteration log
+      Diagnostic   sensitivity of the estimates to alpha_0 (equaidsdiag)
+*/
+VERSION 14.0
+INCLUDE _std_large
+DEFINE _dlgwd 700
+DEFINE _dlght 500
+INCLUDE header
+HELP hlp1, view("help equaids")
+RESET res1
+
+SCRIPT PREINIT
+BEGIN
+  create BOOLEAN has_diag
+END
+SCRIPT POSTINIT
+BEGIN
+  program set_mode
+  program anot_state
+  program vce_state
+  program el_state
+  program init_sel
+END
+PROGRAM init_sel
+BEGIN
+  call program ng_show
+  if sel.ck_sel {
+    call script sel_on
+  }
+  if !sel.ck_sel {
+    call script sel_off
+  }
+END
+
+DIALOG main, label("equaids — AIDS and QUAIDS demand systems") tabtitle("Model")
+BEGIN
+  GROUPBOX gb_act      10   10  640  45, label("What to run")
+  TEXT     tx_act      20   28  100   ., label("Action:")
+  COMBOBOX cb_act     125   28  515   ., dropdownlist contents(actlist) values(actvals) ///
+           onselchangelist(act_change) label("Action")
+
+  GROUPBOX gb_vars     10   62  640 175, label("Variables")
+  TEXT     tx_shares   20   80  620   ., label("Budget shares (one per good; they must sum to one):")
+  VARLIST  vl_shares   20  100  620   ., label("Budget shares") numeric
+  TEXT     tx_prices   20  128  150   ., label("Prices:")
+  RADIO    rb_plev    170  128  110   ., first label("levels") option(NONE)
+  RADIO    rb_plog    285  128  200   ., last label("logs (lnprices)") option(NONE)
+  VARLIST  vl_prices   20  148  620   ., label("Prices, in the order of the shares") numeric
+  TEXT     tx_exp      20  176  150   ., label("Total expenditure:")
+  RADIO    rb_xlev    170  176  110   ., first label("level") option(NONE)
+  RADIO    rb_xlog    285  176  200   ., last label("log (lnexpenditure)") option(NONE)
+  VARNAME  vn_exp      20  196  300   ., label("Total expenditure") numeric
+  TEXT     tx_snames  340  196  110   ., label("Short names:")
+  EDIT     ed_snames  450  196  190   ., label("Short names of the goods") option(snames)
+
+  GROUPBOX gb_mod      10  244  640  95, label("Model")
+  RADIO    rb_quaids   20  262  150   ., first label("QUAIDS") option(NONE)
+  RADIO    rb_aids    170  262  150   ., last label("AIDS (noquadratic)") option(noquadratic)
+  TEXT     tx_demo     20  286  300   ., label("Demographic variables (Ray scaling):")
+  VARLIST  vl_demo    320  286  320   ., label("Demographics") numeric option(demographics)
+  CHECKBOX ck_anot     20  312  300   ., label("Impose alpha_0 (default: min ln x - 0.1):") ///
+           onclickon(program anot_state) onclickoff(program anot_state)
+  EDIT     ed_anot    320  312   80   ., label("alpha_0") numonly option(anot)
+
+  GROUPBOX gb_pimp     10  346  640  72, label("Missing prices (the non-buyers of a good have no unit value)")
+  TEXT     tx_pimp     20  364  620   ., label("Fill them from the households of the same group, the variables tried in order (e.g. psu rururb):")
+  VARLIST  vl_pimp     20  384  620   ., label("Grouping variables") option(pimpute)
+END
+
+LIST actlist
+BEGIN
+  Estimate the model (equaids)
+  Diagnose the specification, without estimating it (equaidsdiag)
+END
+LIST actvals
+BEGIN
+  est
+  diag
+END
+LIST act_change
+BEGIN
+  script mode_est
+  script mode_diag
+END
+
+SCRIPT mode_est
+BEGIN
+  has_diag.setfalse
+  program set_mode
+END
+SCRIPT mode_diag
+BEGIN
+  has_diag.settrue
+  program set_mode
+END
+
+PROGRAM anot_state
+BEGIN
+  if main.ck_anot {
+    call main.ed_anot.enable
+  }
+  if !main.ck_anot {
+    call main.ed_anot.disable
+  }
+END
+
+DIALOG sel, tabtitle("Selection")
+BEGIN
+  GROUPBOX gb_s1       10   10  640  95, label("Selection of the buyers (Shonkwiler and Yen): expected shares Phi f + delta phi")
+  CHECKBOX ck_sel      20   30  610   ., label("Correct the system for the households that do not buy") onclickon(script sel_on) onclickoff(script sel_off)
+  TEXT     tx_selg     40   55  260   ., label("Shares to correct (blank: those with zeros):")
+  EDIT     ed_selg    305   55  335   ., label("Goods to correct")
+  TEXT     tx_tip      40   80  600   ., label("The last good closes the system: every household must buy it. Missing prices: Model tab.")
+
+  GROUPBOX gb_s2       10  115  640 363, label("Variables of the probit only (exclusion restrictions), beyond ln(p/x) and the demographics")
+  TEXT     tx_all      20  137  200   ., label("For every corrected good:")
+  VARLIST  vl_all     225  137  415   ., label("Variables of every probit") numeric
+  TEXT     tx_one      20  163  370   ., label("Goods with variables of their own (0: none, the same for all):")
+  COMBOBOX cb_ng      395  163   60   ., dropdownlist contents(nglist) default(0) onselchange(program ng_show) label("Number of goods")
+  TEXT     tx_g1       20  190   45   ., label("Good:")
+  EDIT     ed_g1       65  190  100   ., label("Good 1")
+  TEXT     tx_v1      180  190   70   ., label("Variables:")
+  VARLIST  vl_v1      250  190  390   ., label("Variables of good 1") numeric
+  TEXT     tx_g2       20  215   45   ., label("Good:")
+  EDIT     ed_g2       65  215  100   ., label("Good 2")
+  TEXT     tx_v2      180  215   70   ., label("Variables:")
+  VARLIST  vl_v2      250  215  390   ., label("Variables of good 2") numeric
+  TEXT     tx_g3       20  240   45   ., label("Good:")
+  EDIT     ed_g3       65  240  100   ., label("Good 3")
+  TEXT     tx_v3      180  240   70   ., label("Variables:")
+  VARLIST  vl_v3      250  240  390   ., label("Variables of good 3") numeric
+  TEXT     tx_g4       20  265   45   ., label("Good:")
+  EDIT     ed_g4       65  265  100   ., label("Good 4")
+  TEXT     tx_v4      180  265   70   ., label("Variables:")
+  VARLIST  vl_v4      250  265  390   ., label("Variables of good 4") numeric
+  TEXT     tx_g5       20  290   45   ., label("Good:")
+  EDIT     ed_g5       65  290  100   ., label("Good 5")
+  TEXT     tx_v5      180  290   70   ., label("Variables:")
+  VARLIST  vl_v5      250  290  390   ., label("Variables of good 5") numeric
+  TEXT     tx_g6       20  315   45   ., label("Good:")
+  EDIT     ed_g6       65  315  100   ., label("Good 6")
+  TEXT     tx_v6      180  315   70   ., label("Variables:")
+  VARLIST  vl_v6      250  315  390   ., label("Variables of good 6") numeric
+  TEXT     tx_g7       20  340   45   ., label("Good:")
+  EDIT     ed_g7       65  340  100   ., label("Good 7")
+  TEXT     tx_v7      180  340   70   ., label("Variables:")
+  VARLIST  vl_v7      250  340  390   ., label("Variables of good 7") numeric
+  TEXT     tx_g8       20  365   45   ., label("Good:")
+  EDIT     ed_g8       65  365  100   ., label("Good 8")
+  TEXT     tx_v8      180  365   70   ., label("Variables:")
+  VARLIST  vl_v8      250  365  390   ., label("Variables of good 8") numeric
+  TEXT     tx_g9       20  390   45   ., label("Good:")
+  EDIT     ed_g9       65  390  100   ., label("Good 9")
+  TEXT     tx_v9      180  390   70   ., label("Variables:")
+  VARLIST  vl_v9      250  390  390   ., label("Variables of good 9") numeric
+  TEXT     tx_g10       20  415   45   ., label("Good:")
+  EDIT     ed_g10       65  415  100   ., label("Good 10")
+  TEXT     tx_v10      180  415   70   ., label("Variables:")
+  VARLIST  vl_v10      250  415  390   ., label("Variables of good 10") numeric
+  TEXT     tx_ex       20  448  620   ., label("Good: the name of its share. Example: wrice, perc_ocupa  gives  selvars(...; wrice: perc_ocupa)")
+END
+
+LIST nglist
+BEGIN
+  0
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+  10
+END
+
+SCRIPT sel_on
+BEGIN
+  sel.tx_selg.enable
+  sel.ed_selg.enable
+  sel.tx_tip.enable
+  sel.gb_s2.enable
+  sel.tx_all.enable
+  sel.vl_all.enable
+  sel.tx_one.enable
+  sel.cb_ng.enable
+  sel.tx_ex.enable
+  sel.tx_g1.enable
+  sel.ed_g1.enable
+  sel.tx_v1.enable
+  sel.vl_v1.enable
+  sel.tx_g2.enable
+  sel.ed_g2.enable
+  sel.tx_v2.enable
+  sel.vl_v2.enable
+  sel.tx_g3.enable
+  sel.ed_g3.enable
+  sel.tx_v3.enable
+  sel.vl_v3.enable
+  sel.tx_g4.enable
+  sel.ed_g4.enable
+  sel.tx_v4.enable
+  sel.vl_v4.enable
+  sel.tx_g5.enable
+  sel.ed_g5.enable
+  sel.tx_v5.enable
+  sel.vl_v5.enable
+  sel.tx_g6.enable
+  sel.ed_g6.enable
+  sel.tx_v6.enable
+  sel.vl_v6.enable
+  sel.tx_g7.enable
+  sel.ed_g7.enable
+  sel.tx_v7.enable
+  sel.vl_v7.enable
+  sel.tx_g8.enable
+  sel.ed_g8.enable
+  sel.tx_v8.enable
+  sel.vl_v8.enable
+  sel.tx_g9.enable
+  sel.ed_g9.enable
+  sel.tx_v9.enable
+  sel.vl_v9.enable
+  sel.tx_g10.enable
+  sel.ed_g10.enable
+  sel.tx_v10.enable
+  sel.vl_v10.enable
+END
+SCRIPT sel_off
+BEGIN
+  sel.tx_selg.disable
+  sel.ed_selg.disable
+  sel.tx_tip.disable
+  sel.gb_s2.disable
+  sel.tx_all.disable
+  sel.vl_all.disable
+  sel.tx_one.disable
+  sel.cb_ng.disable
+  sel.tx_ex.disable
+  sel.tx_g1.disable
+  sel.ed_g1.disable
+  sel.tx_v1.disable
+  sel.vl_v1.disable
+  sel.tx_g2.disable
+  sel.ed_g2.disable
+  sel.tx_v2.disable
+  sel.vl_v2.disable
+  sel.tx_g3.disable
+  sel.ed_g3.disable
+  sel.tx_v3.disable
+  sel.vl_v3.disable
+  sel.tx_g4.disable
+  sel.ed_g4.disable
+  sel.tx_v4.disable
+  sel.vl_v4.disable
+  sel.tx_g5.disable
+  sel.ed_g5.disable
+  sel.tx_v5.disable
+  sel.vl_v5.disable
+  sel.tx_g6.disable
+  sel.ed_g6.disable
+  sel.tx_v6.disable
+  sel.vl_v6.disable
+  sel.tx_g7.disable
+  sel.ed_g7.disable
+  sel.tx_v7.disable
+  sel.vl_v7.disable
+  sel.tx_g8.disable
+  sel.ed_g8.disable
+  sel.tx_v8.disable
+  sel.vl_v8.disable
+  sel.tx_g9.disable
+  sel.ed_g9.disable
+  sel.tx_v9.disable
+  sel.vl_v9.disable
+  sel.tx_g10.disable
+  sel.ed_g10.disable
+  sel.tx_v10.disable
+  sel.vl_v10.disable
+END
+SCRIPT row1_show
+BEGIN
+  sel.tx_g1.show
+  sel.ed_g1.show
+  sel.tx_v1.show
+  sel.vl_v1.show
+END
+SCRIPT row1_hide
+BEGIN
+  sel.ed_g1.setvalue ""
+  sel.vl_v1.setvalue ""
+  sel.tx_g1.hide
+  sel.ed_g1.hide
+  sel.tx_v1.hide
+  sel.vl_v1.hide
+END
+SCRIPT row2_show
+BEGIN
+  sel.tx_g2.show
+  sel.ed_g2.show
+  sel.tx_v2.show
+  sel.vl_v2.show
+END
+SCRIPT row2_hide
+BEGIN
+  sel.ed_g2.setvalue ""
+  sel.vl_v2.setvalue ""
+  sel.tx_g2.hide
+  sel.ed_g2.hide
+  sel.tx_v2.hide
+  sel.vl_v2.hide
+END
+SCRIPT row3_show
+BEGIN
+  sel.tx_g3.show
+  sel.ed_g3.show
+  sel.tx_v3.show
+  sel.vl_v3.show
+END
+SCRIPT row3_hide
+BEGIN
+  sel.ed_g3.setvalue ""
+  sel.vl_v3.setvalue ""
+  sel.tx_g3.hide
+  sel.ed_g3.hide
+  sel.tx_v3.hide
+  sel.vl_v3.hide
+END
+SCRIPT row4_show
+BEGIN
+  sel.tx_g4.show
+  sel.ed_g4.show
+  sel.tx_v4.show
+  sel.vl_v4.show
+END
+SCRIPT row4_hide
+BEGIN
+  sel.ed_g4.setvalue ""
+  sel.vl_v4.setvalue ""
+  sel.tx_g4.hide
+  sel.ed_g4.hide
+  sel.tx_v4.hide
+  sel.vl_v4.hide
+END
+SCRIPT row5_show
+BEGIN
+  sel.tx_g5.show
+  sel.ed_g5.show
+  sel.tx_v5.show
+  sel.vl_v5.show
+END
+SCRIPT row5_hide
+BEGIN
+  sel.ed_g5.setvalue ""
+  sel.vl_v5.setvalue ""
+  sel.tx_g5.hide
+  sel.ed_g5.hide
+  sel.tx_v5.hide
+  sel.vl_v5.hide
+END
+SCRIPT row6_show
+BEGIN
+  sel.tx_g6.show
+  sel.ed_g6.show
+  sel.tx_v6.show
+  sel.vl_v6.show
+END
+SCRIPT row6_hide
+BEGIN
+  sel.ed_g6.setvalue ""
+  sel.vl_v6.setvalue ""
+  sel.tx_g6.hide
+  sel.ed_g6.hide
+  sel.tx_v6.hide
+  sel.vl_v6.hide
+END
+SCRIPT row7_show
+BEGIN
+  sel.tx_g7.show
+  sel.ed_g7.show
+  sel.tx_v7.show
+  sel.vl_v7.show
+END
+SCRIPT row7_hide
+BEGIN
+  sel.ed_g7.setvalue ""
+  sel.vl_v7.setvalue ""
+  sel.tx_g7.hide
+  sel.ed_g7.hide
+  sel.tx_v7.hide
+  sel.vl_v7.hide
+END
+SCRIPT row8_show
+BEGIN
+  sel.tx_g8.show
+  sel.ed_g8.show
+  sel.tx_v8.show
+  sel.vl_v8.show
+END
+SCRIPT row8_hide
+BEGIN
+  sel.ed_g8.setvalue ""
+  sel.vl_v8.setvalue ""
+  sel.tx_g8.hide
+  sel.ed_g8.hide
+  sel.tx_v8.hide
+  sel.vl_v8.hide
+END
+SCRIPT row9_show
+BEGIN
+  sel.tx_g9.show
+  sel.ed_g9.show
+  sel.tx_v9.show
+  sel.vl_v9.show
+END
+SCRIPT row9_hide
+BEGIN
+  sel.ed_g9.setvalue ""
+  sel.vl_v9.setvalue ""
+  sel.tx_g9.hide
+  sel.ed_g9.hide
+  sel.tx_v9.hide
+  sel.vl_v9.hide
+END
+SCRIPT row10_show
+BEGIN
+  sel.tx_g10.show
+  sel.ed_g10.show
+  sel.tx_v10.show
+  sel.vl_v10.show
+END
+SCRIPT row10_hide
+BEGIN
+  sel.ed_g10.setvalue ""
+  sel.vl_v10.setvalue ""
+  sel.tx_g10.hide
+  sel.ed_g10.hide
+  sel.tx_v10.hide
+  sel.vl_v10.hide
+END
+PROGRAM ng_show
+BEGIN
+  if sel.cb_ng.iseq("0") {
+    call script row1_hide
+    call script row2_hide
+    call script row3_hide
+    call script row4_hide
+    call script row5_hide
+    call script row6_hide
+    call script row7_hide
+    call script row8_hide
+    call script row9_hide
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("1") {
+    call script row1_show
+    call script row2_hide
+    call script row3_hide
+    call script row4_hide
+    call script row5_hide
+    call script row6_hide
+    call script row7_hide
+    call script row8_hide
+    call script row9_hide
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("2") {
+    call script row1_show
+    call script row2_show
+    call script row3_hide
+    call script row4_hide
+    call script row5_hide
+    call script row6_hide
+    call script row7_hide
+    call script row8_hide
+    call script row9_hide
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("3") {
+    call script row1_show
+    call script row2_show
+    call script row3_show
+    call script row4_hide
+    call script row5_hide
+    call script row6_hide
+    call script row7_hide
+    call script row8_hide
+    call script row9_hide
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("4") {
+    call script row1_show
+    call script row2_show
+    call script row3_show
+    call script row4_show
+    call script row5_hide
+    call script row6_hide
+    call script row7_hide
+    call script row8_hide
+    call script row9_hide
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("5") {
+    call script row1_show
+    call script row2_show
+    call script row3_show
+    call script row4_show
+    call script row5_show
+    call script row6_hide
+    call script row7_hide
+    call script row8_hide
+    call script row9_hide
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("6") {
+    call script row1_show
+    call script row2_show
+    call script row3_show
+    call script row4_show
+    call script row5_show
+    call script row6_show
+    call script row7_hide
+    call script row8_hide
+    call script row9_hide
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("7") {
+    call script row1_show
+    call script row2_show
+    call script row3_show
+    call script row4_show
+    call script row5_show
+    call script row6_show
+    call script row7_show
+    call script row8_hide
+    call script row9_hide
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("8") {
+    call script row1_show
+    call script row2_show
+    call script row3_show
+    call script row4_show
+    call script row5_show
+    call script row6_show
+    call script row7_show
+    call script row8_show
+    call script row9_hide
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("9") {
+    call script row1_show
+    call script row2_show
+    call script row3_show
+    call script row4_show
+    call script row5_show
+    call script row6_show
+    call script row7_show
+    call script row8_show
+    call script row9_show
+    call script row10_hide
+  }
+  if sel.cb_ng.iseq("10") {
+    call script row1_show
+    call script row2_show
+    call script row3_show
+    call script row4_show
+    call script row5_show
+    call script row6_show
+    call script row7_show
+    call script row8_show
+    call script row9_show
+    call script row10_show
+  }
+END
+
+INCLUDE ifin
+INCLUDE weights_fpai
+
+DIALOG se, tabtitle("SE/Robust")
+BEGIN
+  GROUPBOX gb_v        10   10  640 240, label("Variance estimator (coefficients and elasticities)")
+  RADIO    rb_robust   20   30  600   ., first label("Robust (default)") onclickon(program vce_state)
+  RADIO    rb_cluster  20   55  250   ., label("Clustered by:") onclickon(program vce_state)
+  VARNAME  vn_clust   270   55  200   ., label("Cluster variable")
+  RADIO    rb_svy      20   80  600   ., label("Survey design declared by svyset (strata, PSUs, fpc, pweight)") ///
+           onclickon(program vce_state)
+  RADIO    rb_conv     20  105  600   ., label("Conventional (coefficients; homoskedastic errors, no weights)") ///
+           onclickon(program vce_state)
+  RADIO    rb_boot     20  130  600   ., last label("Bootstrap of the whole procedure (prices filled, probits and system estimated again)") ///
+           onclickon(program vce_state)
+  TEXT     tx_reps     40  155  100   ., label("Replications:")
+  SPINNER  sp_reps    145  155   70   ., label("Replications") min(2) max(100000) default(200)
+  TEXT     tx_seed    235  155   40   ., label("Seed:")
+  EDIT     ed_seed    280  155   90   ., label("Seed") numonly
+  CHECKBOX ck_bsvy    390  155  250   ., label("Resample the PSUs of svyset")
+  TEXT     tx_svy      40  185  600   ., label("With the survey design, leave the Weights tab empty: the weight comes from svyset.")
+  TEXT     tx_svy2     40  205  600   ., label("Strata with a single PSU follow svyset's singleunit() option.")
+  TEXT     tx_bnote    40  225  600   ., label("Use the bootstrap when equaids warns that the linearized standard errors are unreliable.")
+END
+
+PROGRAM vce_state
+BEGIN
+  if se.rb_cluster & !has_diag {
+    call se.vn_clust.enable
+  }
+  if !se.rb_cluster | has_diag {
+    call se.vn_clust.disable
+  }
+  if se.rb_boot & !has_diag {
+    call se.sp_reps.enable
+    call se.ed_seed.enable
+    call se.ck_bsvy.enable
+  }
+  if !se.rb_boot | has_diag {
+    call se.sp_reps.disable
+    call se.ed_seed.disable
+    call se.ck_bsvy.disable
+  }
+END
+
+DIALOG rpt, tabtitle("Reporting")
+BEGIN
+  GROUPBOX gb_el       10   10  640  75, label("Elasticities")
+  COMBOBOX cb_el       20   28  620   ., dropdownlist contents(ellist) values(elvals) ///
+           default(households) option(elasticities) onselchange(program el_state) label("Elasticities")
+  TEXT     tx_hhs      20   53  300   ., label("Size of the household (individuals only):")
+  VARNAME  vn_hhs     330   53  310   ., label("Household size") numeric
+
+  GROUPBOX gb_disp     10   93  640 185, label("Display")
+  DEFINE _x 20
+  DEFINE _cx 150
+  DEFINE _y 113
+  INCLUDE _sp_level
+  TEXT     tx_dec     280  113  120   ., label("Decimals:")
+  SPINNER  sp_dec     405  113   60   ., label("Decimals") min(0) max(8) default(4) option(dec)
+  CHECKBOX ck_comp     20  140  610   ., label("Add the compensated (Hicksian) price elasticities") option(compensated)
+  CHECKBOX ck_checks   20  162  610   ., label("Show the aggregation identities (Engel, Cournot, homogeneity, symmetry)") option(checks)
+  CHECKBOX ck_stars    20  184  610   ., label("Significance stars on the estimates") option(stars)
+  CHECKBOX ck_dislas   20  206  300   ., label("Show the last good") default(1)
+  CHECKBOX ck_dreg    330  206  300   ., label("Display the coefficients")
+  CHECKBOX ck_noese    20  228  300   ., label("Skip the standard errors of the elasticities") option(noelastse)
+  CHECKBOX ck_notab   330  228  300   ., label("Do not display the tables") option(notable)
+
+  GROUPBOX gb_save     10  285  640  70, label("Save the tables")
+  TEXT     tx_save     20  305  620   ., label("File (the extension gives the format: .docx .tex .xlsx .csv .md):")
+  FILE     fi_save     20  325  620   ., label("Browse...") save option(saveres) ///
+           filter("Word (*.docx)|*.docx|LaTeX (*.tex)|*.tex|Excel (*.xlsx)|*.xlsx|CSV (*.csv)|*.csv|Markdown (*.md)|*.md")
+END
+
+LIST ellist
+BEGIN
+  Households: mean over the households, each by its weight (default)
+  Individuals: each household counts for its weight times its size
+  Market: elasticities of total demand, each household by its expenditure
+  Reference household, at the means of ln p, ln x and z
+  Mean of the household elasticities, not weighted by the shares (hhmean)
+END
+LIST elvals
+BEGIN
+  households
+  individuals
+  market
+  reference
+  hhmean
+END
+
+// the household size, for the elasticities of the individual only
+PROGRAM el_state
+BEGIN
+  if rpt.cb_el.iseq("individuals") & !has_diag {
+    call rpt.tx_hhs.enable
+    call rpt.vn_hhs.enable
+  }
+  if !rpt.cb_el.iseq("individuals") | has_diag {
+    call rpt.tx_hhs.disable
+    call rpt.vn_hhs.disable
+  }
+END
+
+DIALOG conv, tabtitle("Estimation")
+BEGIN
+  GROUPBOX gb_c        10   10  640 110, label("Iterated FGNLS (Gauss-Newton, analytic Jacobian)")
+  TEXT     tx_tol      20   30  450   ., label("Tolerance on the Newton decrement g'A^-1 g (default 1e-6):")
+  EDIT     ed_tol     480   30  100   ., label("Tolerance") numonly default(1e-6) option(tolerance)
+  TEXT     tx_it       20   58  450   ., label("Maximum number of iterations:")
+  SPINNER  sp_it      480   58  100   ., label("Iterations") min(1) max(10000) default(300) option(iterate)
+  CHECKBOX ck_nolog    20   86  600   ., label("Suppress the iteration log") option(nolog) default(1)
+END
+
+DIALOG dg, tabtitle("Diagnostic")
+BEGIN
+  GROUPBOX gb_d        10   10  640 120, label("equaidsdiag: sensitivity to alpha_0 (the only part that estimates)")
+  CHECKBOX ck_sens     20   30  600   ., label("Estimate the model at several values of alpha_0 (sensitivity)") option(sensitivity)
+  TEXT     tx_a0l      20   58  600   ., label("Values of alpha_0 (default: min ln x - 0.1, and 1, 2 and 4 below):")
+  EDIT     ed_a0l      20   78  620   ., label("alpha_0 values") option(a0list)
+  TEXT     tx_dnote    20  104  620   ., label("Sections D0-D5 (data, prices, alpha_0, demographics, conditioning, small goods) always run.")
+END
+
+// controls of the estimator alone are greyed out under the diagnostic, and
+// the Diagnostic tab under the estimation
+PROGRAM set_mode
+BEGIN
+  if has_diag {
+    call se.rb_robust.disable
+    call se.rb_cluster.disable
+    call se.rb_svy.disable
+    call se.rb_conv.disable
+    call se.rb_boot.disable
+    call rpt.cb_el.disable
+    call rpt.sp_level.disable
+    call rpt.sp_dec.disable
+    call rpt.ck_comp.disable
+    call rpt.ck_checks.disable
+    call rpt.ck_stars.disable
+    call rpt.ck_dislas.disable
+    call rpt.ck_dreg.disable
+    call rpt.ck_noese.disable
+    call rpt.ck_notab.disable
+    call rpt.fi_save.disable
+    call main.ed_snames.disable
+    call conv.ed_tol.disable
+    call conv.sp_it.disable
+    call conv.ck_nolog.disable
+    call dg.ck_sens.enable
+    call dg.ed_a0l.enable
+  }
+  if !has_diag {
+    call se.rb_robust.enable
+    call se.rb_cluster.enable
+    call se.rb_svy.enable
+    call se.rb_conv.enable
+    call se.rb_boot.enable
+    call rpt.cb_el.enable
+    call rpt.sp_level.enable
+    call rpt.sp_dec.enable
+    call rpt.ck_comp.enable
+    call rpt.ck_checks.enable
+    call rpt.ck_stars.enable
+    call rpt.ck_dislas.enable
+    call rpt.ck_dreg.enable
+    call rpt.ck_noese.enable
+    call rpt.ck_notab.enable
+    call rpt.fi_save.enable
+    call main.ed_snames.enable
+    call conv.ed_tol.enable
+    call conv.sp_it.enable
+    call conv.ck_nolog.enable
+    call dg.ck_sens.disable
+    call dg.ed_a0l.disable
+  }
+  call program vce_state
+  call program el_state
+END
+
+PROGRAM command
+BEGIN
+  if has_diag {
+    put "equaidsdiag "
+  }
+  if !has_diag {
+    put "equaids "
+  }
+  require main.vl_shares
+  varlist main.vl_shares
+  put " " /program ifin_output
+  put " " /program weights_output
+  beginoptions
+    require main.vl_prices
+    if main.rb_plev {
+      put " prices(" main.vl_prices ")"
+    }
+    if main.rb_plog {
+      put " lnprices(" main.vl_prices ")"
+    }
+    require main.vn_exp
+    if main.rb_xlev {
+      put " expenditure(" main.vn_exp ")"
+    }
+    if main.rb_xlog {
+      put " lnexpenditure(" main.vn_exp ")"
+    }
+    option main.rb_aids
+    optionarg main.vl_demo
+    optionarg main.vl_pimp
+    if sel.ck_sel {
+      put " selection"
+      if sel.ed_selg {
+        put " selgoods(" sel.ed_selg ")"
+      }
+      if sel.vl_v1 {
+        require sel.ed_g1
+      }
+      if sel.ed_g1 {
+        require sel.vl_v1
+      }
+      if sel.vl_v2 {
+        require sel.ed_g2
+      }
+      if sel.ed_g2 {
+        require sel.vl_v2
+      }
+      if sel.vl_v3 {
+        require sel.ed_g3
+      }
+      if sel.ed_g3 {
+        require sel.vl_v3
+      }
+      if sel.vl_v4 {
+        require sel.ed_g4
+      }
+      if sel.ed_g4 {
+        require sel.vl_v4
+      }
+      if sel.vl_v5 {
+        require sel.ed_g5
+      }
+      if sel.ed_g5 {
+        require sel.vl_v5
+      }
+      if sel.vl_v6 {
+        require sel.ed_g6
+      }
+      if sel.ed_g6 {
+        require sel.vl_v6
+      }
+      if sel.vl_v7 {
+        require sel.ed_g7
+      }
+      if sel.ed_g7 {
+        require sel.vl_v7
+      }
+      if sel.vl_v8 {
+        require sel.ed_g8
+      }
+      if sel.ed_g8 {
+        require sel.vl_v8
+      }
+      if sel.vl_v9 {
+        require sel.ed_g9
+      }
+      if sel.ed_g9 {
+        require sel.vl_v9
+      }
+      if sel.vl_v10 {
+        require sel.ed_g10
+      }
+      if sel.ed_g10 {
+        require sel.vl_v10
+      }
+      if sel.vl_all | sel.ed_g1 | sel.ed_g2 | sel.ed_g3 | sel.ed_g4 | sel.ed_g5 | sel.ed_g6 | sel.ed_g7 | sel.ed_g8 | sel.ed_g9 | sel.ed_g10 {
+        put " selvars("
+        put sel.vl_all
+        if sel.ed_g1 {
+          if sel.vl_all {
+            put "; "
+          }
+          put sel.ed_g1 ": " sel.vl_v1
+        }
+        if sel.ed_g2 {
+          if sel.vl_all | sel.ed_g1 {
+            put "; "
+          }
+          put sel.ed_g2 ": " sel.vl_v2
+        }
+        if sel.ed_g3 {
+          if sel.vl_all | sel.ed_g1 | sel.ed_g2 {
+            put "; "
+          }
+          put sel.ed_g3 ": " sel.vl_v3
+        }
+        if sel.ed_g4 {
+          if sel.vl_all | sel.ed_g1 | sel.ed_g2 | sel.ed_g3 {
+            put "; "
+          }
+          put sel.ed_g4 ": " sel.vl_v4
+        }
+        if sel.ed_g5 {
+          if sel.vl_all | sel.ed_g1 | sel.ed_g2 | sel.ed_g3 | sel.ed_g4 {
+            put "; "
+          }
+          put sel.ed_g5 ": " sel.vl_v5
+        }
+        if sel.ed_g6 {
+          if sel.vl_all | sel.ed_g1 | sel.ed_g2 | sel.ed_g3 | sel.ed_g4 | sel.ed_g5 {
+            put "; "
+          }
+          put sel.ed_g6 ": " sel.vl_v6
+        }
+        if sel.ed_g7 {
+          if sel.vl_all | sel.ed_g1 | sel.ed_g2 | sel.ed_g3 | sel.ed_g4 | sel.ed_g5 | sel.ed_g6 {
+            put "; "
+          }
+          put sel.ed_g7 ": " sel.vl_v7
+        }
+        if sel.ed_g8 {
+          if sel.vl_all | sel.ed_g1 | sel.ed_g2 | sel.ed_g3 | sel.ed_g4 | sel.ed_g5 | sel.ed_g6 | sel.ed_g7 {
+            put "; "
+          }
+          put sel.ed_g8 ": " sel.vl_v8
+        }
+        if sel.ed_g9 {
+          if sel.vl_all | sel.ed_g1 | sel.ed_g2 | sel.ed_g3 | sel.ed_g4 | sel.ed_g5 | sel.ed_g6 | sel.ed_g7 | sel.ed_g8 {
+            put "; "
+          }
+          put sel.ed_g9 ": " sel.vl_v9
+        }
+        if sel.ed_g10 {
+          if sel.vl_all | sel.ed_g1 | sel.ed_g2 | sel.ed_g3 | sel.ed_g4 | sel.ed_g5 | sel.ed_g6 | sel.ed_g7 | sel.ed_g8 | sel.ed_g9 {
+            put "; "
+          }
+          put sel.ed_g10 ": " sel.vl_v10
+        }
+        put ")"
+      }
+    }
+    if main.ck_anot {
+      require main.ed_anot
+      optionarg main.ed_anot
+    }
+    if has_diag {
+      option dg.ck_sens
+      optionarg dg.ed_a0l
+    }
+    if !has_diag {
+      optionarg main.ed_snames
+      if se.rb_cluster {
+        require se.vn_clust
+        put " vce(cluster " se.vn_clust ")"
+      }
+      if se.rb_svy {
+        put " vce(svy)"
+      }
+      if se.rb_conv {
+        put " vce(conventional)"
+      }
+      if se.rb_boot {
+        put " vce(bootstrap, reps(" se.sp_reps ")"
+        if se.ed_seed {
+          put " seed(" se.ed_seed ")"
+        }
+        if se.ck_bsvy {
+          put " svy"
+        }
+        put ")"
+      }
+      optionarg /hidedefault rpt.cb_el
+      if rpt.cb_el.iseq("individuals") {
+        require rpt.vn_hhs
+        put " hhsize(" rpt.vn_hhs ")"
+      }
+      optionarg /hidedefault rpt.sp_level
+      optionarg /hidedefault rpt.sp_dec
+      option rpt.ck_comp
+      option rpt.ck_checks
+      option rpt.ck_stars
+      if !rpt.ck_dislas {
+        put " dislas(0)"
+      }
+      if rpt.ck_dreg {
+        put " dregres(1)"
+      }
+      option rpt.ck_noese
+      option rpt.ck_notab
+      if rpt.fi_save {
+        optionarg /quoted rpt.fi_save
+      }
+      optionarg /hidedefault conv.ed_tol
+      optionarg /hidedefault conv.sp_it
+      option conv.ck_nolog
+    }
+  endoptions
+END
